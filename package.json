@@ -1,0 +1,16 @@
+{
+  "name": "wcutil",
+  "version": "1.0.0",
+  "description": "A tiny helper for creating Web Components.",
+  "main": "WebComponent.js",
+  "scripts": {
+    "build": "webpack --mode production --config ./webpack.config.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Andrew Kuo",
+  "license": "MIT",
+  "devDependencies": {
+    "webpack": "^4.35.0",
+    "webpack-cli": "^3.3.5"
+  }
+}
