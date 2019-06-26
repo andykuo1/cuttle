@@ -173,13 +173,19 @@ export default HelloWorld;
 Or just use any part of it you want...
 
 ```javascript
+
+const HelloWorldTemplate = Cuttle.createTemplateElementFromString(
+    '<h1>Hello</h1>',
+    'h1 { color: tomato; }'
+);
+
 class HelloWorld extends HTMLElement
 {
     constructor()
     {
         super();
         Cuttle.constructShadowRoot(this,
-            document.querySelector('template#hello-world'),
+            HelloWorldTemplate,
             { mode: 'close' });
     }
 }
