@@ -124,7 +124,7 @@ export function getDefinedShadowTemplate(elementClass)
  *                                      Refer to the web component specifications for
  *                                      more information.
  */
-function defineCustomTag(elementClass, tagName, customOpts)
+export function defineCustomTag(elementClass, tagName, customOpts)
 {
     // Just in case it was already defined somewhere...
     if (!window.customElements.get(tagName))

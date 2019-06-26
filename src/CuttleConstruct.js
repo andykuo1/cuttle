@@ -1,5 +1,7 @@
 /** @module CuttleConstruct */
-
+import {
+    addPropertiesToElement
+} from './properties/ElementProperties.js';
 import {
     getDefinedClassProperties,
     getDefinedShadowTemplate
@@ -48,7 +50,7 @@ export function construct(element, opts = {})
  * @param {Node} shadowTemplate The child element in the shadow DOM root.
  * @param {Object} opts         The options passed to attachShadow().
  */
-function constructShadowRoot(element, shadowTemplate, opts)
+export function constructShadowRoot(element, shadowTemplate, opts)
 {
     const shadowRoot = element.attachShadow(opts);
     shadowRoot.appendChild(shadowTemplate.content.cloneNode(true));
@@ -56,5 +58,5 @@ function constructShadowRoot(element, shadowTemplate, opts)
 
 function constructProperties(element, properties)
 {
-    // Do it.
+    addPropertiesToElement(element, properties);
 }

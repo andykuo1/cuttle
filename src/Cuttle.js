@@ -1,2 +1,3 @@
-export { define } from './CuttleDefine.js';
-export { construct } from './CuttleConstruct.js';
+export { define, defineCustomTag } from './CuttleDefine.js';
+export { construct, constructShadowRoot } from './CuttleConstruct.js';
+export { createTemplateElementFromString, createElementFromString } from './util/WebComponentHelper.js';
