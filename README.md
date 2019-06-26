@@ -1,4 +1,4 @@
-# Tiny WebComponent Helper
+# Cuttle
 A tiny helper for creating Web Components.
 
 The file itself is smaller than ~3KB.
@@ -167,5 +167,23 @@ class HelloWorld extends HTMLElement
     }
 }
 
+export default HelloWorld;
+```
+
+Or just use any part of it you want...
+
+```javascript
+class HelloWorld extends HTMLElement
+{
+    constructor()
+    {
+        super();
+        Cuttle.constructShadowRoot(this,
+            document.querySelector('template#hello-world'),
+            { mode: 'close' });
+    }
+}
+
+Cuttle.defineCustomTag(HelloWorld, 'hello-world', { extends: 'h1' });
 export default HelloWorld;
 ```
