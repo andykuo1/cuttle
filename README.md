@@ -14,11 +14,15 @@ The file itself is smaller than ~3KB.
 - Use what you learn or already know about native Web Components! Simple and reusable.
 
 ## What do I need to USE a Cuttle component?
-- Add a `<script>` tag to the document for Cuttle.js.
+- ~~Add a `<script>` tag to the document for Cuttle.js~~
+    - **NO LONGER NECESSARY!!! :D**
+    - Transpile it with our new Babel plugin and you are **DEPENDENCY-FREE!**.
 - And a `<script>` tag for the component you want to use.
 - That's it.
 
-** In the future, we are planning to be able "transpile" Cuttle components into plain, old native web components. It would be just like you wrote it from scratch! No more external dependencies and usable everywhere, just as web components should be. **
+~~**In the future, we are planning to be able "transpile" Cuttle components into plain, old native web components. It would be just like you wrote it from scratch! No more external dependencies and usable everywhere, just as web components should be.**~~
+
+**It's already here! Check out our new Babel plugin!**
 
 ```html
 <!DOCTYPE html>

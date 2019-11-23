@@ -1,0 +1,30 @@
+{
+  "name": "babel-plugin-cuttle-transform",
+  "version": "1.0.0",
+  "description": "A transformer for cuttle",
+  "main": "dist/index.js",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "rollup --config \"rollup.config.js\"",
+    "test": "npm run build && rm -rf out && babel test -d out"
+  },
+  "keywords": [
+    "babel-plugin",
+    "cuttle"
+  ],
+  "author": "Andrew Kuo",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.0.0"
+  },
+  "peerDependencies": {
+    "@babel/core": "^7.0.0-0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.7.0",
+    "@babel/core": "^7.7.2",
+    "@babel/preset-env": "^7.7.1",
+    "rollup": "^1.27.4",
+    "rollup-plugin-babel": "^4.3.3"
+  }
+}
