@@ -31,6 +31,8 @@ _This is a redesign of the cuttle utility library (hence the extra 2). This incl
 <html>
     <head>
         <script src="cuttle.min.js"></script>
+        <!-- ^^^ If you use the Babel plugin, you don't need to load any external libraries! -->
+
         <script src="MyCuttleComponent.js"></script>
     </head>
     <body>
@@ -50,104 +52,74 @@ class HelloWorld extends HTMLElement
     constructor()
     {
         super();
-        Cuttle.construct(this);
     }
 }
+cuttle.defineComponent(HelloWorld, 'hello-world');
 
-export default Cuttle.define(HelloWorld, 'hello-world');
+export default HelloWorld;
 ```
 
 Something a little more complex...
 
 ```javascript
+const HELLO_WORLD_TEMPLATE = document.querySelector('template#hello-world');
+class HelloWorld extends HTMLElement
+{
+    static get properties()
+    {
+        return {
+            content: { type: String, value: 'World' },
+            rainbow: { type: Boolean }
+        };
+    }
+
+    constructor()
+    {
+        super();
+
+        cuttle.attachShadow(this, HELLO_WORLD_TEMPLATE);
+    }
+}
+cuttle.defineComponent(HelloWorld, 'hello-world');
+export default HelloWorld;
+```
+
+Have it as a single file component...
+
+```javascript
+const TEMPLATE = cuttle.createTemplate(`
+<h1>Hello!</h1>
+`);
+const STYLE = cuttle.createStyle(`
+h1 {
+    color: tomato;
+}
+`);
+
 class HelloWorld extends HTMLElement
 {
     static get properties()
     {
         return {
             content: { type: String },
-            rainbow: { type: Boolean, reflect: true }
-        };
+            rainbow: { type: Boolean }
+        }
     }
-
-    static get shadowTemplate()
-    {
-        return document.querySelector('template#hello-world');
-    }
-
-    static get customTag() { return 'hello-world'; }
 
     constructor()
     {
         super();
-        Cuttle.construct(this, {
-            shadow: { mode: 'close' }
-        });
 
-        this.content = 'World';
+        cuttle.attachShadow(this, TEMPLATE, STYLE);
     }
 }
 
-export default Cuttle.define(HelloWorld, {
-    custom: { extends: 'h1' }
-});
+cuttle.defineComponent(HelloWorld, 'hello-world');
 ```
 
-Have it as properties instead of functions...
-
-```javascript
-class HelloWorld extends HTMLElement
-{
-    constructor()
-    {
-        super();
-        Cuttle.construct(this, { shadow: { mode: 'close' }});
-    }
-}
-
-export default Cuttle.define(HelloWorld, {
-    name: 'hello-world',
-    shadowTemplate: document.querySelector('template#hello-world'),
-    properties: {
-        content: { type: String},
-        rainbow: { type: Boolean, reflect: true }
-    },
-    custom: { extends: 'h1' }
-});
-```
-
-Or as a single file component...
-
-```javascript
-const TEMPLATE = `
-<h1>Hello!</h1>`;
-const STYLE = `
-h1 {
-    color: tomato;
-}`;
-
-class HelloWorld extends HTMLElement
-{
-    constructor()
-    {
-        super();
-        Cuttle.construct(this, { shadow: { mode: 'close' }});
-    }
-}
-
-export default Cuttle.define(HelloWorld, {
-    name: 'hello-world',
-    shadowTemplate: {
-        template: TEMPLATE,
-        style: STYLE
-    },
-    properties: {
-        content: { type: String},
-        rainbow: { type: Boolean, reflect: true }
-    },
-    custom: { extends: 'h1' }
-});
-```
+---
+**THIS PART IS UNDER CONSTRUCTION**
+---
 
 Or as decorators when we get they get implemented into the language...
 

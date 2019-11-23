@@ -2,31 +2,27 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Web Component Examples</title>
+        <title>Stage 5</title>
+
+        <script src="./build/bundle.js" type="module"></script>
     </head>
     <body>
-        <h1>Welcome to Web Components!</h1>
-        <nav>
-            <ul>
-                <li>
-                    <a href="stage0/index.html">Stage 0</a>
-                </li>
-                <li>
-                    <a href="stage1/index.html">Stage 1</a>
-                </li>
-                <li>
-                    <a href="stage2/index.html">Stage 2</a>
-                </li>
-                <li>
-                    <a href="stage3/index.html">Stage 3</a>
-                </li>
-                <li>
-                    <a href="stage4/index.html">Stage 4</a>
-                </li>
-                <li>
-                    <a href="stage5/index.html">Stage 5</a>
-                </li>
-            </ul>
-        </nav>
+        <h1>Stage 5</h1>
+        
+        <!-- Test case for default value -->
+        <hello-world></hello-world>
+
+        <!-- Test case for post-upgraded props -->
+        <script>
+            const element = document.createElement('hello-world');
+            element.name = 'Bob';
+            document.body.appendChild(element);
+        </script>
+
+        <!-- Test case for changing props -->
+        <hello-world name="Andrew" disabled></hello-world>
+        <button onclick="document.querySelector('hello-world[name=\'Andrew\']').toggleAttribute('disabled')">
+            Toggle Andrew's Hello World
+        </button>
     </body>
 </html>
