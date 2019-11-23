@@ -11,6 +11,6 @@
   "license": "MIT",
   "devDependencies": {
     "rollup": "^1.16.2",
-    "rollup-plugin-terser": "^5.0.0"
+    "rollup-plugin-terser": "^5.1.2"
   }
 }
