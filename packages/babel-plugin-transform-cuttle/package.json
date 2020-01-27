@@ -1,0 +1,29 @@
+{
+  "name": "babel-plugin-transform-cuttle",
+  "version": "1.0.0",
+  "description": "The Babel transform plugin for zero-abstraction Cuttle.",
+  "main": "dist/babel-plugin-transform-cuttle.js",
+  "scripts": {
+    "build": "rollup --config"
+  },
+  "keywords": [
+    "babel",
+    "cuttle"
+  ],
+  "author": "Andrew Kuo",
+  "license": "MIT",
+  "engines": {
+    "node": ">=6"
+  },
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.8.3",
+    "cuttle": "^1.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.8.3",
+    "rollup": "^1.29.1"
+  },
+  "peerDependencies": {
+    "@babel/core": "^7.8.3"
+  }
+}

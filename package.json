@@ -1,0 +1,28 @@
+{
+  "name": "cuttle",
+  "version": "1.0.0",
+  "description": "A tiny helper for creating Web Components.",
+  "main": "index.js",
+  "scripts": {
+    "build": "lerna run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cuttle",
+    "webcomponent"
+  ],
+  "author": "Andrew Kuo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andykuo1/cuttle.git"
+  },
+  "bugs": {
+    "url": "https://github.com/andykuo1/cuttle/issues"
+  },
+  "homepage": "https://github.com/andykuo1/cuttle#readme",
+  "devDependencies": {
+    "lerna": "^3.20.2"
+  },
+  "dependencies": {}
+}

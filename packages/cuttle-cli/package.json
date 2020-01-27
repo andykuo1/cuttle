@@ -1,0 +1,30 @@
+{
+  "name": "cuttle-cli",
+  "version": "1.0.0",
+  "description": "The CLI wrapper for zero-abstraction Cuttle.",
+  "main": "bin/index.js",
+  "bin": {
+    "cuttle": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "",
+    "test": "cuttle ./docs/example/hello-world.js ./docs/example/dist/hello-world.js"
+  },
+  "keywords": [
+    "cli",
+    "cuttle"
+  ],
+  "author": "Andrew Kuo",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.8.3",
+    "babel-plugin-transform-cuttle": "^1.0.0",
+    "cuttle": "^1.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.8.3"
+  },
+  "peerDependencies": {
+    "@babel/core": "^7.8.3"
+  }
+}

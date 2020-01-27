@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Cuttle Example</title>
+
+        <script src="../../dist/cuttle.js"></script>
+    </head>
+    <body>
+        <hello-world></hello-world>
+        <script>
+            const TEMPLATE = Cuttle.createTemplateElement(`
+            <p>
+                Hello world!
+            </p>
+            `);
+            const STYLE = Cuttle.createStyleElement(`
+            p {
+                color: blue;
+            }
+            `);
+            class HelloWorld extends HTMLElement
+            {
+                constructor()
+                {
+                    super();
+
+                    this.attachShadow({ mode: 'open' });
+
+                    Cuttle.appendTemplate(this, TEMPLATE);
+                    Cuttle.appendStyle(this, STYLE);
+                }
+            }
+            Cuttle.defineComponent(HelloWorld, 'hello-world');
+        </script>
+    </body>
+</html>

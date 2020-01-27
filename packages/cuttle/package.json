@@ -1,16 +1,18 @@
 {
   "name": "cuttle",
   "version": "1.0.0",
-  "description": "A tiny helper for creating Web Components.",
-  "browser": "dist/cuttle.js",
+  "main": "dist/cjs/cuttle.js",
+  "module": "dist/esm/cuttle.js",
+  "description": "A tiny helper library for creating Web Components.",
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup --config",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
   "author": "Andrew Kuo",
   "license": "MIT",
   "devDependencies": {
-    "rollup": "^1.16.2",
-    "rollup-plugin-terser": "^5.1.2"
+    "rollup": "^1.29.1",
+    "rollup-plugin-terser": "^5.2.0"
   }
 }
