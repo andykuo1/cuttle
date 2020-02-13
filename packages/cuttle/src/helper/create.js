@@ -36,6 +36,10 @@ export function appendTemplate(componentInstance, templateElement)
     root.appendChild(content);
     return content;
 }
+appendTemplate.template = {
+    content: 'INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))',
+    arguments: [ 'INSTANCE', 'TEMPLATE_ELEMENT' ],
+};
 
 /**
  * Appends a cloned instance of the passed-in style element.
@@ -49,6 +53,10 @@ export function appendStyle(componentInstance, styleElement)
     root.appendChild(content);
     return content;
 }
+appendStyle.template = {
+    content: 'INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))',
+    arguments: [ 'INSTANCE', 'STYLE_ELEMENT' ],
+};
 
 /**
  * Attaches a shadow root.
@@ -63,3 +71,9 @@ export function attachShadow(componentInstance, templateElement = undefined, sty
     if (templateElement) shadowRoot.appendChild(templateElement.content.cloneNode(true));
     return shadowRoot;
 }
+attachShadow.template = {
+    content: 'INSTANCE.attachShadow({ mode: \'open\' });'
+        + '\nif (TEMPLATE_ELEMENT) INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))'
+        + '\nif (STYLE_ELEMENT) INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true));',
+    arguments: [ 'INSTANCE', 'TEMPLATE_ELEMENT', 'STYLE_ELEMENT' ],
+};

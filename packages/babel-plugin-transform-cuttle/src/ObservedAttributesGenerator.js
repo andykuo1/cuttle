@@ -1,10 +1,11 @@
 import { types } from '@babel/core';
 
-export function generate(properties, path)
+export function generate(properties, path, context)
 {
-    replaceObservedAttributes(path.parentPath, superCallback => {
+    replaceObservedAttributes(path, superCallback => {
         let returnArrayElements = [
-            ...Object.keys(properties).map(value => types.stringLiteral(value))
+            ...Object.keys(properties).map(value => types.stringLiteral(value)),
+            ...context.events.map(value => types.stringLiteral('on' + value)),
         ];
 
         if (superCallback)

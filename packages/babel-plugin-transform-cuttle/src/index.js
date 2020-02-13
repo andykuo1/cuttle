@@ -1,7 +1,10 @@
 import { declare } from '@babel/helper-plugin-utils';
 import { types, template } from '@babel/core';
 
+import Cuttle from 'cuttle';
+
 import * as PropertiesEvaluator from './PropertiesEvaluator.js';
+import * as EventsEvaluator from './EventsEvaluator.js';
 import * as ObservedAttributesGenerator from './ObservedAttributesGenerator.js';
 import * as ConnectedCallbackGenerator from './ConnectedCallbackGenerator.js';
 import * as PropertyAccessorGenerator from './PropertyAccessorGenerator.js';
@@ -9,7 +12,11 @@ import * as AttributeChangedCallbackGenerator from './AttributeChangedCallbackGe
 
 export default declare(api => {
     api.assertVersion(7);
-
+    const context = {
+        properties: {},
+        events: [],
+        attributeChangedCallbacks: {}
+    };
     const visitor = {
         ImportDeclaration(path)
         {
@@ -20,101 +27,56 @@ export default declare(api => {
                 return;
             }
         },
+        ClassBody: {
+            exit(path)
+            {
+                let properties = context.properties;
+                ObservedAttributesGenerator.generate(properties, path, context);
+                ConnectedCallbackGenerator.generate(properties, path, context);
+                AttributeChangedCallbackGenerator.generate(properties, path, context);
+            }
+        },
         ClassMethod(path)
         {
-            // `static get properties()`
             let node = path.node;
-            if (!node.static
-                || node.kind !== 'get'
-                || node.key.name !== 'properties')
-                return;
-            
-            const properties = PropertiesEvaluator.evaluate(path);
-            ObservedAttributesGenerator.generate(properties, path);
-            ConnectedCallbackGenerator.generate(properties, path);
-            PropertyAccessorGenerator.generate(properties, path);
-            AttributeChangedCallbackGenerator.generate(properties, path);
+            // `static get properties()`
+            if (node.static && node.kind === 'get' && node.key.name === 'properties')
+            {
+                let properties = PropertiesEvaluator.evaluate(path);
+                context.properties = properties;
+    
+                PropertyAccessorGenerator.generate(properties, path, context);
+                
+                // Remove it from the class...
+                path.remove();
+            }
+            // `static get events()`
+            else if (node.static && node.kind === 'get' && node.key.name === 'events')
+            {
+                let events = EventsEvaluator.evaluate(path);
+                context.events = events;
 
-            // Remove it from the class...
-            path.remove();
+                let eventProperties = {};
+                for(let event of events)
+                {
+                    eventProperties[event] = PropertyAccessorGenerator.EVENT_CALLBACK;
+                }
+                PropertyAccessorGenerator.generate(eventProperties, path, context);
+                
+                // Remove it from the class...
+                path.remove();
+            }
         },
         CallExpression(path)
         {
             let node = path.node;
 
             if (node.callee.type === 'MemberExpression'
-            && node.callee.object.name === 'Cuttle')
+                && node.callee.object.name === 'Cuttle')
             {
-                // `appendTemplate()`
-                if (node.callee.property.name === 'appendTemplate')
-                {
-                    let componentInstance = node.arguments[0];
-                    let templateElement = node.arguments[1];
+                let name = node.callee.property.name;
+                let func = Cuttle[name];
 
-                    let buildRequire = template(`
-                        INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        TEMPLATE_ELEMENT: templateElement
-                    }));
-                    return;
-                }
-                // `appendStyle()`
-                if (node.callee.property.name === 'appendStyle')
-                {
-                    let componentInstance = node.arguments[0];
-                    let styleElement = node.arguments[1];
-
-                    let buildRequire = template(`
-                        INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        STYLE_ELEMENT: styleElement
-                    }));
-                    return;
-                }
-                // `attachShadow()`
-                if (node.callee.property.name === 'attachShadow')
-                {
-                    let componentInstance = node.arguments[0];
-                    let templateElement = node.arguments[1];
-                    let styleElement = node.arguments[2];
-
-                    if (templateElement)
-                    {
-                        let buildRequire = template(`
-                            INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))
-                        `);
-                        path.parentPath.insertAfter(buildRequire({
-                            INSTANCE: componentInstance,
-                            TEMPLATE_ELEMENT: templateElement
-                        }));
-                    }
-
-                    if (styleElement)
-                    {
-                        let buildRequire = template(`
-                            INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))
-                        `);
-                        path.parentPath.insertAfter(buildRequire({
-                            INSTANCE: componentInstance,
-                            STYLE_ELEMENT: styleElement
-                        }));
-                    }
-
-                    {
-                        let buildRequire = template(`
-                            INSTANCE.attachShadow({ mode: 'open' })
-                        `);
-                        path.replaceWithMultiple(buildRequire({
-                            INSTANCE: node.arguments[0]
-                        }));
-                    }
-
-                    return;
-                }
                 // `defineComponent()`
                 if (node.callee.property.name === 'defineComponent')
                 {
@@ -140,113 +102,66 @@ export default declare(api => {
 
                     return;
                 }
-                // `createTemplateElement()`
-                if (node.callee.property.name === 'createTemplateElement')
-                {
-                    let buildRequire = template(`
-                        (function createTemplateElement(templateString) {
-                            let element = document.createElement('template');
-                            element.innerHTML = templateString;
-                            return element;
-                        })(ARGUMENT)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        ARGUMENT: node.arguments[0]
-                    }));
-                    return;
-                }
-                // `createStyleElement()`
-                if (node.callee.property.name === 'createStyleElement')
-                {
-                    let buildRequire = template(`
-                        (function createStyleElement(styleString) {
-                            let element = document.createElement('style');
-                            element.innerHTML = styleString;
-                            return element;
-                        })(ARGUMENT)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        ARGUMENT: node.arguments[0]
-                    }));
-                    return;
-                }
                 // `bindAttributeChanged()`
-                if (node.callee.property.name === 'bindAttributeChanged')
+                else if (node.callee.property.name === 'bindAttributeChanged')
                 {
                     let componentInstance = node.arguments[0];
                     let attributeName = node.arguments[1];
                     let callback = node.arguments[2];
 
-                    let buildRequire = template(`
-                        INSTANCE.CALLBACK_NAME = CALLBACK
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        CALLBACK_NAME: AttributeChangedCallbackGenerator.getCallbackNameForAttribute(attributeName.value),
-                        CALLBACK: callback
-                    }));
+                    context.attributeChangedCallbacks[attributeName.value] = {
+                        instance: componentInstance,
+                        callback
+                    };
+
+                    path.remove();
                     return;
                 }
-                // `find()`
-                if (node.callee.property.name === 'find')
+                else if ('template' in func)
                 {
-                    let componentInstance = node.arguments[0];
-                    let selectors = node.arguments[1];
-
-                    let buildRequire = template(`
-                        (INSTANCE.shadowRoot || INSTANCE).querySelector(SELECTORS)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        SELECTORS: selectors
-                    }));
-
+                    let templateOpts = func.template;
+                    let buildRequire = template(templateOpts.content);
+                    let argumentMap = templateOpts.constants ? { ...templateOpts.constants } : {};
+                    for(let i = 0; i < templateOpts.arguments.length; ++i)
+                    {
+                        let templateArg = templateOpts.arguments[i];
+                        if (typeof templateArg === 'string')
+                        {
+                            argumentMap[templateArg] = node.arguments[i];
+                        }
+                        else if (typeof templateArg === 'object')
+                        {
+                            let templateValue = templateArg.value;
+                            if (typeof templateValue === 'string')
+                            {
+                                argumentMap[templateArg.name] = templateValue;
+                            }
+                            else if (typeof templateValue === 'function')
+                            {
+                                argumentMap[templateArg.name] = templateValue(node.arguments[i]);
+                            }
+                            else
+                            {
+                                throw new Error('Unknown argument value type.');
+                            }
+                        }
+                        else
+                        {
+                            throw new Error('Unknown argument identifier type.');
+                        }
+                    }
+                    path.replaceWithMultiple(buildRequire(argumentMap));
                     return;
                 }
-                // `findById()`
-                if (node.callee.property.name === 'find')
+                else if (func)
                 {
-                    let componentInstance = node.arguments[0];
-                    let id = node.arguments[1];
-
-                    let buildRequire = template(`
-                        (INSTANCE.shadowRoot || INSTANCE).getElementById(ID)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        ID: id
-                    }));
-
-                    return;
-                }
-                // `findAll()`
-                if (node.callee.property.name === 'find')
-                {
-                    let componentInstance = node.arguments[0];
-                    let selectors = node.arguments[1];
-
-                    let buildRequire = template(`
-                        (INSTANCE.shadowRoot || INSTANCE).querySelectorAll(SELECTORS)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        SELECTORS: selectors
-                    }));
-
-                    return;
-                }
-                // `getRootElement()`
-                if (node.callee.property.name === 'getRootElement')
-                {
-                    let componentInstance = node.arguments[0];
-
-                    let buildRequire = template(`
-                        (INSTANCE.shadowRoot || INSTANCE)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance
-                    }));
-                    
+                    let argumentMap = {};
+                    for(let i = 0; i < node.arguments.length; ++i)
+                    {
+                        argumentMap['ARGUMENT' + i] = node.arguments[i];
+                    }
+                    let buildRequire = template(`(${func.toString()})(${Object.keys(argumentMap).join(',')})`);
+                    path.replaceWithMultiple(buildRequire(argumentMap));
                     return;
                 }
             }

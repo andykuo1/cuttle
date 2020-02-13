@@ -1,7 +1,10 @@
 'use strict';
 
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
 var helperPluginUtils = require('@babel/helper-plugin-utils');
 var core = require('@babel/core');
+var Cuttle = _interopDefault(require('cuttle'));
 
 function evaluate(path)
 {
@@ -76,11 +79,93 @@ function findPropertyWithName(objectProperties, name)
     return null;
 }
 
-function generate(properties, path)
+function evaluate$1(path)
 {
-    replaceObservedAttributes(path.parentPath, superCallback => {
+    let dst = [];
+    let node = path.node;
+    let returnStatement = node.body.body[node.body.body.length - 1];
+    let returnedObject = returnStatement.argument;
+    if (returnedObject.type === 'ArrayExpression')
+    {
+        for (let arrayElement of returnedObject.elements)
+        {
+            if (arrayElement.type === 'StringLiteral')
+            {
+                let event = arrayElement.value;
+                if (!isGlobalEventHandler(event))
+                {
+                    dst.push(event);
+                }
+                else
+                {
+                    throw new Error('Cannot register a duplicate GlobalEventHandler event.');
+                }
+            }
+            else
+            {
+                throw new Error('Unsupported event value type - must be a string.');
+            }
+        }
+
+        return dst;
+    }
+    else
+    {
+        throw new Error('Unsupported properties object evaluation.');
+    }
+}
+
+const GLOBAL_EVENT_HANDLER_KEYS = new Set([
+    'onabort',
+    'onblur',
+    'onerror',
+    'onfocus',
+    'oncancel',
+    'oncanplay',
+    'onchange',
+    'onclick',
+    'onclose',
+    'oncontextmenu',
+    'oncuechange',
+    'ondblclick',
+    'ondrag',
+    'ondragend',
+    'ondragenter',
+    'ondragexit',
+    'ondragleave',
+    'ondragstart',
+    'ondrop',
+    'ondurationchange',
+    'onemptied',
+    'onended',
+    'onformdata',
+    'ongotpointercapture',
+    'oninput',
+    'oninvalid',
+    'onkeydown',
+    'onkeypress',
+    'onkeyup',
+    'onload',
+    'onloadeddata',
+    'onloadedmetadata',
+    'onloadend',
+    'onloadstart',
+    'onresize',
+    'ontransitioncancel',
+    'ontransitionend',
+]);
+
+function isGlobalEventHandler(eventName)
+{
+    return GLOBAL_EVENT_HANDLER_KEYS.has(eventName);
+}
+
+function generate(properties, path, context)
+{
+    replaceObservedAttributes(path, superCallback => {
         let returnArrayElements = [
-            ...Object.keys(properties).map(value => core.types.stringLiteral(value))
+            ...Object.keys(properties).map(value => core.types.stringLiteral(value)),
+            ...context.events.map(value => core.types.stringLiteral('on' + value)),
         ];
 
         if (superCallback)
@@ -129,9 +214,9 @@ function replaceObservedAttributes(parentPath, callback)
     parentNode.body.unshift(callback(null));
 }
 
-function generate$1(properties, path)
+function generate$1(properties, path, context)
 {
-    replaceConnectedCallback(path.parentPath, superCallback => {
+    replaceConnectedCallback(path, superCallback => {
         let statements = [];
 
         const defaultBuildRequire = core.template(`
@@ -173,16 +258,10 @@ function generate$1(properties, path)
             );
         }
 
+        // User-defined callback...
         if (superCallback)
         {
-            statements.push(
-                core.types.expressionStatement(
-                    core.types.callExpression(
-                        core.types.arrowFunctionExpression([], superCallback.body),
-                        []
-                    )
-                )
-            );
+            statements.push(superCallback.body);
         }
         
         return core.types.classMethod(
@@ -222,13 +301,15 @@ function getDefaultPropertyValue(properties, key)
     return properties[key].value;
 }
 
-function generate$2(properties, path)
+const EVENT_CALLBACK = Symbol('callback');
+
+function generate$2(properties, path, context)
 {
     for (let key of Object.keys(properties))
     {
         let property = properties[key];
         // Create getter...
-        createGetterFromProperty(path, key);
+        createGetterFromProperty(path, key, property);
         // Create setter...
         createSetterFromProperty(path, key, property);
     }
@@ -236,6 +317,7 @@ function generate$2(properties, path)
 
 function createGetterFromProperty(path, key, property)
 {
+    if (property === EVENT_CALLBACK) key = 'on' + key;
     let result = core.types.classMethod(
         'get',
         core.types.identifier(key),
@@ -252,76 +334,89 @@ function createGetterFromProperty(path, key, property)
 function createSetterFromProperty(path, key, property)
 {
     let statement;
-    switch(property.type.name)
+    if (property === EVENT_CALLBACK)
     {
-        case 'Boolean':
-            statement = `this.toggleAttribute('${key}', value)`;
-            break;
-        case 'String':
-            statement = `this.setAttribute('${key}', value)`;
-            break;
-        default:
-            statement = `this.setAttribute('${key}', String(value))`;
+        let event = key;
+        key = 'on' + event;
+        statement = `if (this._${key}) this.removeEventListener('${event}', this._${key});`
+            + `this._${key} = value;`
+            + `if (this._${key}) this.addEventListener('${event}', value);`;
+        statement = core.template.ast(statement);
+    }
+    else
+    {
+        switch(property.type.name)
+        {
+            case 'Boolean':
+                statement = `this.toggleAttribute('${key}', value)`;
+                break;
+            case 'String':
+                statement = `this.setAttribute('${key}', value)`;
+                break;
+            default:
+                statement = `this.setAttribute('${key}', String(value))`;
+        }
+        statement = [core.template.ast(statement)];
     }
     let result = core.types.classMethod(
         'set',
         core.types.identifier(key),
         [ core.types.identifier('value') ],
-        core.types.blockStatement([
-            core.template.ast(statement)
-        ])
+        core.types.blockStatement(statement)
     );
     path.insertAfter(result);
 }
 
-function generate$3(properties, path)
+function generate$3(properties, path, context)
 {
-    replaceAttributeChangedCallback(path.parentPath, superCallback => {
+    replaceAttributeChangedCallback(path, superCallback => {
         let statements = [];
 
-        let innerStatements = [];
-        innerStatements.push(core.types.variableDeclaration('let', [
-            core.types.variableDeclarator(core.types.identifier('ownedPrev')),
-            core.types.variableDeclarator(core.types.identifier('ownedValue'))
-        ]));
-
         let switchCases = [];
-        const attributeBuildRequire = core.template(`
-        if (this.CALLBACK) {
-            ownedPrev = this.KEY;
-            ownedValue = this.KEY = PARSER_EXPRESSION;
-            this.CALLBACK.call(this, ownedValue, ownedPrev, attribute);
+        const attributeBuildRequire = core.template(`{
+            let ownedPrev = this.KEY;
+            let ownedValue = this.KEY = PARSER_EXPRESSION;
+            (CALLBACK).call(INSTANCE, ownedValue, ownedPrev, attribute);
         }
         `);
         for(let key of Object.keys(properties))
         {
-            switchCases.push(core.types.switchCase(core.types.stringLiteral(key), [
-                attributeBuildRequire({
-                    KEY: core.types.identifier('_' + key),
-                    CALLBACK: core.types.identifier(getCallbackNameForAttribute(key)),
-                    PARSER_EXPRESSION: getParserExpressionByProperty(properties[key]),
+            if (key in context.attributeChangedCallbacks)
+            {
+                switchCases.push(core.types.switchCase(core.types.stringLiteral(key), [
+                    attributeBuildRequire({
+                        KEY: core.types.identifier('_' + key),
+                        INSTANCE: context.attributeChangedCallbacks[key].instance,
+                        PARSER_EXPRESSION: getParserExpressionByProperty(properties[key]),
+                        CALLBACK: context.attributeChangedCallbacks[key].callback,
+                    }),
+                    core.types.breakStatement()
+                ]));
+            }
+        }
+
+        const eventBuildRequire = core.template(`{
+            this.KEY = new Function('event', 'with(document){with(this){' + value + '}}').bind(INSTANCE);
+        }
+        `);
+        for(let event of context.events)
+        {
+            switchCases.push(core.types.switchCase(core.types.stringLiteral('on' + event), [
+                eventBuildRequire({
+                    KEY: core.types.identifier('on' + event),
+                    INSTANCE: core.types.thisExpression(),
                 }),
                 core.types.breakStatement()
             ]));
         }
-        innerStatements.push(core.types.switchStatement(core.types.identifier('attribute'), switchCases));
-
-        // Handle the 'any' callback...
-        innerStatements.push(core.template.ast(`
-            if (this.${getCallbackNameForAttribute('*')}) {
-                this.${getCallbackNameForAttribute('*')}.call(this, ownedValue, ownedPrev, attribute);
-            }
-        `));
-
-        // Make sure our code is within its own scope...
-        statements.push(core.types.blockStatement(innerStatements));
-
+        statements.push(core.types.switchStatement(core.types.identifier('attribute'), switchCases));
+        
         if (superCallback)
         {
             statements.push(
                 core.types.expressionStatement(
                     core.types.callExpression(
-                        core.types.arrowFunctionExpression([superCallback.params], superCallback.body),
+                        core.types.arrowFunctionExpression(superCallback.params, superCallback.body),
                         [
                             core.types.identifier('attribute'),
                             core.types.identifier('prev'),
@@ -376,21 +471,13 @@ function getParserExpressionByProperty(property)
     } 
 }
 
-function getCallbackNameForAttribute(attribute)
-{
-    if (attribute === '*')
-    {
-        return '__any__AttributeChangedCallback';
-    }
-    else
-    {
-        return '__' + attribute + 'AttributeChangedCallback';
-    }
-}
-
 var index = helperPluginUtils.declare(api => {
     api.assertVersion(7);
-
+    const context = {
+        properties: {},
+        events: [],
+        attributeChangedCallbacks: {}
+    };
     const visitor = {
         ImportDeclaration(path)
         {
@@ -401,101 +488,56 @@ var index = helperPluginUtils.declare(api => {
                 return;
             }
         },
+        ClassBody: {
+            exit(path)
+            {
+                let properties = context.properties;
+                generate(properties, path, context);
+                generate$1(properties, path);
+                generate$3(properties, path, context);
+            }
+        },
         ClassMethod(path)
         {
-            // `static get properties()`
             let node = path.node;
-            if (!node.static
-                || node.kind !== 'get'
-                || node.key.name !== 'properties')
-                return;
-            
-            const properties = evaluate(path);
-            generate(properties, path);
-            generate$1(properties, path);
-            generate$2(properties, path);
-            generate$3(properties, path);
+            // `static get properties()`
+            if (node.static && node.kind === 'get' && node.key.name === 'properties')
+            {
+                let properties = evaluate(path);
+                context.properties = properties;
+    
+                generate$2(properties, path);
+                
+                // Remove it from the class...
+                path.remove();
+            }
+            // `static get events()`
+            else if (node.static && node.kind === 'get' && node.key.name === 'events')
+            {
+                let events = evaluate$1(path);
+                context.events = events;
 
-            // Remove it from the class...
-            path.remove();
+                let eventProperties = {};
+                for(let event of events)
+                {
+                    eventProperties[event] = EVENT_CALLBACK;
+                }
+                generate$2(eventProperties, path);
+                
+                // Remove it from the class...
+                path.remove();
+            }
         },
         CallExpression(path)
         {
             let node = path.node;
 
             if (node.callee.type === 'MemberExpression'
-            && node.callee.object.name === 'Cuttle')
+                && node.callee.object.name === 'Cuttle')
             {
-                // `appendTemplate()`
-                if (node.callee.property.name === 'appendTemplate')
-                {
-                    let componentInstance = node.arguments[0];
-                    let templateElement = node.arguments[1];
+                let name = node.callee.property.name;
+                let func = Cuttle[name];
 
-                    let buildRequire = core.template(`
-                        INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        TEMPLATE_ELEMENT: templateElement
-                    }));
-                    return;
-                }
-                // `appendStyle()`
-                if (node.callee.property.name === 'appendStyle')
-                {
-                    let componentInstance = node.arguments[0];
-                    let styleElement = node.arguments[1];
-
-                    let buildRequire = core.template(`
-                        INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        STYLE_ELEMENT: styleElement
-                    }));
-                    return;
-                }
-                // `attachShadow()`
-                if (node.callee.property.name === 'attachShadow')
-                {
-                    let componentInstance = node.arguments[0];
-                    let templateElement = node.arguments[1];
-                    let styleElement = node.arguments[2];
-
-                    if (templateElement)
-                    {
-                        let buildRequire = core.template(`
-                            INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))
-                        `);
-                        path.parentPath.insertAfter(buildRequire({
-                            INSTANCE: componentInstance,
-                            TEMPLATE_ELEMENT: templateElement
-                        }));
-                    }
-
-                    if (styleElement)
-                    {
-                        let buildRequire = core.template(`
-                            INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))
-                        `);
-                        path.parentPath.insertAfter(buildRequire({
-                            INSTANCE: componentInstance,
-                            STYLE_ELEMENT: styleElement
-                        }));
-                    }
-
-                    {
-                        let buildRequire = core.template(`
-                            INSTANCE.attachShadow({ mode: 'open' })
-                        `);
-                        path.replaceWithMultiple(buildRequire({
-                            INSTANCE: node.arguments[0]
-                        }));
-                    }
-
-                    return;
-                }
                 // `defineComponent()`
                 if (node.callee.property.name === 'defineComponent')
                 {
@@ -521,113 +563,66 @@ var index = helperPluginUtils.declare(api => {
 
                     return;
                 }
-                // `createTemplateElement()`
-                if (node.callee.property.name === 'createTemplateElement')
-                {
-                    let buildRequire = core.template(`
-                        (function createTemplateElement(templateString) {
-                            let element = document.createElement('template');
-                            element.innerHTML = templateString;
-                            return element;
-                        })(ARGUMENT)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        ARGUMENT: node.arguments[0]
-                    }));
-                    return;
-                }
-                // `createStyleElement()`
-                if (node.callee.property.name === 'createStyleElement')
-                {
-                    let buildRequire = core.template(`
-                        (function createStyleElement(styleString) {
-                            let element = document.createElement('style');
-                            element.innerHTML = styleString;
-                            return element;
-                        })(ARGUMENT)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        ARGUMENT: node.arguments[0]
-                    }));
-                    return;
-                }
                 // `bindAttributeChanged()`
-                if (node.callee.property.name === 'bindAttributeChanged')
+                else if (node.callee.property.name === 'bindAttributeChanged')
                 {
                     let componentInstance = node.arguments[0];
                     let attributeName = node.arguments[1];
                     let callback = node.arguments[2];
 
-                    let buildRequire = core.template(`
-                        INSTANCE.CALLBACK_NAME = CALLBACK
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        CALLBACK_NAME: getCallbackNameForAttribute(attributeName.value),
-                        CALLBACK: callback
-                    }));
+                    context.attributeChangedCallbacks[attributeName.value] = {
+                        instance: componentInstance,
+                        callback
+                    };
+
+                    path.remove();
                     return;
                 }
-                // `find()`
-                if (node.callee.property.name === 'find')
+                else if ('template' in func)
                 {
-                    let componentInstance = node.arguments[0];
-                    let selectors = node.arguments[1];
-
-                    let buildRequire = core.template(`
-                        (INSTANCE.shadowRoot || INSTANCE).querySelector(SELECTORS)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        SELECTORS: selectors
-                    }));
-
+                    let templateOpts = func.template;
+                    let buildRequire = core.template(templateOpts.content);
+                    let argumentMap = templateOpts.constants ? { ...templateOpts.constants } : {};
+                    for(let i = 0; i < templateOpts.arguments.length; ++i)
+                    {
+                        let templateArg = templateOpts.arguments[i];
+                        if (typeof templateArg === 'string')
+                        {
+                            argumentMap[templateArg] = node.arguments[i];
+                        }
+                        else if (typeof templateArg === 'object')
+                        {
+                            let templateValue = templateArg.value;
+                            if (typeof templateValue === 'string')
+                            {
+                                argumentMap[templateArg.name] = templateValue;
+                            }
+                            else if (typeof templateValue === 'function')
+                            {
+                                argumentMap[templateArg.name] = templateValue(node.arguments[i]);
+                            }
+                            else
+                            {
+                                throw new Error('Unknown argument value type.');
+                            }
+                        }
+                        else
+                        {
+                            throw new Error('Unknown argument identifier type.');
+                        }
+                    }
+                    path.replaceWithMultiple(buildRequire(argumentMap));
                     return;
                 }
-                // `findById()`
-                if (node.callee.property.name === 'find')
+                else if (func)
                 {
-                    let componentInstance = node.arguments[0];
-                    let id = node.arguments[1];
-
-                    let buildRequire = core.template(`
-                        (INSTANCE.shadowRoot || INSTANCE).getElementById(ID)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        ID: id
-                    }));
-
-                    return;
-                }
-                // `findAll()`
-                if (node.callee.property.name === 'find')
-                {
-                    let componentInstance = node.arguments[0];
-                    let selectors = node.arguments[1];
-
-                    let buildRequire = core.template(`
-                        (INSTANCE.shadowRoot || INSTANCE).querySelectorAll(SELECTORS)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance,
-                        SELECTORS: selectors
-                    }));
-
-                    return;
-                }
-                // `getRootElement()`
-                if (node.callee.property.name === 'getRootElement')
-                {
-                    let componentInstance = node.arguments[0];
-
-                    let buildRequire = core.template(`
-                        (INSTANCE.shadowRoot || INSTANCE)
-                    `);
-                    path.replaceWithMultiple(buildRequire({
-                        INSTANCE: componentInstance
-                    }));
-                    
+                    let argumentMap = {};
+                    for(let i = 0; i < node.arguments.length; ++i)
+                    {
+                        argumentMap['ARGUMENT' + i] = node.arguments[i];
+                    }
+                    let buildRequire = core.template(`(${func.toString()})(${Object.keys(argumentMap).join(',')})`);
+                    path.replaceWithMultiple(buildRequire(argumentMap));
                     return;
                 }
             }

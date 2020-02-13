@@ -1,3 +1,21 @@
+var self = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    get default () { return self; },
+    get bindAttributeChanged () { return bindAttributeChanged; },
+    get find () { return find; },
+    get findAll () { return findAll; },
+    get findById () { return findById; },
+    get getRootElement () { return getRootElement; },
+    get createTemplateElement () { return createTemplateElement; },
+    get createStyleElement () { return createStyleElement; },
+    get appendTemplate () { return appendTemplate; },
+    get appendStyle () { return appendStyle; },
+    get attachShadow () { return attachShadow; },
+    get isExtendedClassForTagName () { return isExtendedClassForTagName; },
+    get isCustomElement () { return isCustomElement; },
+    get defineComponent () { return defineComponent; }
+});
+
 /** Helpful find functions. */
 
 /**
@@ -7,6 +25,10 @@
  * @returns {Element} The first element that satisfies the specified selectors within the root of the component.
  */
 function find(component, selectors) { return getRootElement(component).querySelector(selectors); }
+find.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).querySelector(SELECTORS)',
+    arguments: [ 'INSTANCE', 'SELECTORS' ],
+};
 
 /**
  * Finds all the elements in the component that satisfy the selectors.
@@ -15,6 +37,10 @@ function find(component, selectors) { return getRootElement(component).querySele
  * @returns {Element} The first element that satisfies the specified selectors within the root of the component.
  */
 function findAll(component, selectors) { return getRootElement(component).querySelectorAll(selectors); }
+findAll.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).querySelectorAll(SELECTORS)',
+    arguments: [ 'INSTANCE', 'SELECTORS' ],
+};
 
 /**
  * Finds the element in the component that has the specified id.
@@ -23,6 +49,10 @@ function findAll(component, selectors) { return getRootElement(component).queryS
  * @returns {Element} The first element with the matched `id` attribute within the root of the component.
  */
 function findById(component, id) { return getRootElement(component).getElementById(id); }
+findById.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).getElementById(ID)',
+    arguments: [ 'INSTANCE', 'ID' ],
+};
 
 /**
  * Gets the element root of the component.
@@ -34,6 +64,10 @@ function getRootElement(component)
     if (!(component instanceof HTMLElement)) throw new Error('Cannot find root element of component not extended from HTMLElement.');
     return component.shadowRoot || component;
 }
+getRootElement.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE)',
+    arguments: [ 'INSTANCE' ],
+};
 
 /** Helpful create functions. */
 
@@ -72,6 +106,10 @@ function appendTemplate(componentInstance, templateElement)
     root.appendChild(content);
     return content;
 }
+appendTemplate.template = {
+    content: 'INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))',
+    arguments: [ 'INSTANCE', 'TEMPLATE_ELEMENT' ],
+};
 
 /**
  * Appends a cloned instance of the passed-in style element.
@@ -85,6 +123,10 @@ function appendStyle(componentInstance, styleElement)
     root.appendChild(content);
     return content;
 }
+appendStyle.template = {
+    content: 'INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true))',
+    arguments: [ 'INSTANCE', 'STYLE_ELEMENT' ],
+};
 
 /**
  * Attaches a shadow root.
@@ -99,6 +141,12 @@ function attachShadow(componentInstance, templateElement = undefined, styleEleme
     if (templateElement) shadowRoot.appendChild(templateElement.content.cloneNode(true));
     return shadowRoot;
 }
+attachShadow.template = {
+    content: 'INSTANCE.attachShadow({ mode: \'open\' });'
+        + '\nif (TEMPLATE_ELEMENT) INSTANCE.shadowRoot.appendChild(TEMPLATE_ELEMENT.content.cloneNode(true))'
+        + '\nif (STYLE_ELEMENT) INSTANCE.shadowRoot.appendChild(STYLE_ELEMENT.cloneNode(true));',
+    arguments: [ 'INSTANCE', 'TEMPLATE_ELEMENT', 'STYLE_ELEMENT' ],
+};
 
 /** Sanity checker for extended elements */
 
@@ -395,4 +443,7 @@ function stringParser(value) { return value; }
 function booleanParser(value) { return value === null ? false : true; }
 function customParser(parser, value) { parser.call(undefined, value); }
 
+// TODO: Add custom form elements.
+
+export default self;
 export { appendStyle, appendTemplate, attachShadow, bindAttributeChanged, createStyleElement, createTemplateElement, defineComponent, find, findAll, findById, getRootElement, isCustomElement, isExtendedClassForTagName };

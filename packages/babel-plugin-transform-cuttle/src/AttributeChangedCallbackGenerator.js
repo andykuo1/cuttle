@@ -1,53 +1,55 @@
 import { types, template } from '@babel/core';
 
-export function generate(properties, path)
+export function generate(properties, path, context)
 {
-    replaceAttributeChangedCallback(path.parentPath, superCallback => {
+    replaceAttributeChangedCallback(path, superCallback => {
         let statements = [];
 
-        let innerStatements = [];
-        innerStatements.push(types.variableDeclaration('let', [
-            types.variableDeclarator(types.identifier('ownedPrev')),
-            types.variableDeclarator(types.identifier('ownedValue'))
-        ]));
-
         let switchCases = [];
-        const attributeBuildRequire = template(`
-        if (this.CALLBACK) {
-            ownedPrev = this.KEY;
-            ownedValue = this.KEY = PARSER_EXPRESSION;
-            this.CALLBACK.call(this, ownedValue, ownedPrev, attribute);
+        const attributeBuildRequire = template(`{
+            let ownedPrev = this.KEY;
+            let ownedValue = this.KEY = PARSER_EXPRESSION;
+            (CALLBACK).call(INSTANCE, ownedValue, ownedPrev, attribute);
         }
         `);
         for(let key of Object.keys(properties))
         {
-            switchCases.push(types.switchCase(types.stringLiteral(key), [
-                attributeBuildRequire({
-                    KEY: types.identifier('_' + key),
-                    CALLBACK: types.identifier(getCallbackNameForAttribute(key)),
-                    PARSER_EXPRESSION: getParserExpressionByProperty(properties[key]),
+            if (key in context.attributeChangedCallbacks)
+            {
+                switchCases.push(types.switchCase(types.stringLiteral(key), [
+                    attributeBuildRequire({
+                        KEY: types.identifier('_' + key),
+                        INSTANCE: context.attributeChangedCallbacks[key].instance,
+                        PARSER_EXPRESSION: getParserExpressionByProperty(properties[key]),
+                        CALLBACK: context.attributeChangedCallbacks[key].callback,
+                    }),
+                    types.breakStatement()
+                ]));
+            }
+        }
+
+        const eventBuildRequire = template(`{
+            this.KEY = new Function('event', 'with(document){with(this){' + value + '}}').bind(INSTANCE);
+        }
+        `);
+        for(let event of context.events)
+        {
+            switchCases.push(types.switchCase(types.stringLiteral('on' + event), [
+                eventBuildRequire({
+                    KEY: types.identifier('on' + event),
+                    INSTANCE: types.thisExpression(),
                 }),
                 types.breakStatement()
             ]));
         }
-        innerStatements.push(types.switchStatement(types.identifier('attribute'), switchCases));
-
-        // Handle the 'any' callback...
-        innerStatements.push(template.ast(`
-            if (this.${getCallbackNameForAttribute('*')}) {
-                this.${getCallbackNameForAttribute('*')}.call(this, ownedValue, ownedPrev, attribute);
-            }
-        `));
-
-        // Make sure our code is within its own scope...
-        statements.push(types.blockStatement(innerStatements));
-
+        statements.push(types.switchStatement(types.identifier('attribute'), switchCases));
+        
         if (superCallback)
         {
             statements.push(
                 types.expressionStatement(
                     types.callExpression(
-                        types.arrowFunctionExpression([superCallback.params], superCallback.body),
+                        types.arrowFunctionExpression(superCallback.params, superCallback.body),
                         [
                             types.identifier('attribute'),
                             types.identifier('prev'),

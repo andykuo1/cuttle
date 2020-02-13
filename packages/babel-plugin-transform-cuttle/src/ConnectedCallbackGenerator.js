@@ -1,8 +1,8 @@
 import { types, template } from '@babel/core';
 
-export function generate(properties, path)
+export function generate(properties, path, context)
 {
-    replaceConnectedCallback(path.parentPath, superCallback => {
+    replaceConnectedCallback(path, superCallback => {
         let statements = [];
 
         const defaultBuildRequire = template(`
@@ -44,16 +44,10 @@ export function generate(properties, path)
             );
         }
 
+        // User-defined callback...
         if (superCallback)
         {
-            statements.push(
-                types.expressionStatement(
-                    types.callExpression(
-                        types.arrowFunctionExpression([], superCallback.body),
-                        []
-                    )
-                )
-            );
+            statements.push(superCallback.body);
         }
         
         return types.classMethod(

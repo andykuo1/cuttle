@@ -7,6 +7,10 @@
  * @returns {Element} The first element that satisfies the specified selectors within the root of the component.
  */
 export function find(component, selectors) { return getRootElement(component).querySelector(selectors); }
+find.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).querySelector(SELECTORS)',
+    arguments: [ 'INSTANCE', 'SELECTORS' ],
+};
 
 /**
  * Finds all the elements in the component that satisfy the selectors.
@@ -15,6 +19,10 @@ export function find(component, selectors) { return getRootElement(component).qu
  * @returns {Element} The first element that satisfies the specified selectors within the root of the component.
  */
 export function findAll(component, selectors) { return getRootElement(component).querySelectorAll(selectors); }
+findAll.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).querySelectorAll(SELECTORS)',
+    arguments: [ 'INSTANCE', 'SELECTORS' ],
+};
 
 /**
  * Finds the element in the component that has the specified id.
@@ -23,6 +31,10 @@ export function findAll(component, selectors) { return getRootElement(component)
  * @returns {Element} The first element with the matched `id` attribute within the root of the component.
  */
 export function findById(component, id) { return getRootElement(component).getElementById(id); }
+findById.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE).getElementById(ID)',
+    arguments: [ 'INSTANCE', 'ID' ],
+};
 
 /**
  * Gets the element root of the component.
@@ -34,3 +46,7 @@ export function getRootElement(component)
     if (!(component instanceof HTMLElement)) throw new Error('Cannot find root element of component not extended from HTMLElement.');
     return component.shadowRoot || component;
 }
+getRootElement.template = {
+    content: '(INSTANCE.shadowRoot || INSTANCE)',
+    arguments: [ 'INSTANCE' ],
+};

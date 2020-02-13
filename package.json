@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "lerna run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && node ./packages/cuttle-cli/bin/index.js ./packages/cuttle-cli/docs/example/hello-world.js ./packages/cuttle-cli/docs/example/dist/hello-world.js"
   },
   "keywords": [
     "cuttle",
