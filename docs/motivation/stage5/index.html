@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Stage 5</title>
+        <script src="cuttle/bundle.js"></script>
+    </head>
+    <body>
+        <h1>Stage 5</h1>
+
+        <task-master name="Greg" onboom="console.log('boom')"></task-master>
+        
+        <template id="task-master">
+            <h1 id="title">Title</h1>
+            <button id="newTask" onclick="this.getRootNode().host.onClick(event)">+ New Task</button>
+            <ul>
+                <li>Boom.</li>
+                <li>Boom.</li>
+                <li>Boom.</li>
+                <li>You have one hour.</li>
+                <li>Your time starts now.</li>
+            </ul>
+        </template>
+        <script>
+            function EventListener(type)
+            {
+                if (!type) throw new Error('Event type must be defined.');
+                return function EventListener(value)
+                {
+                    let listener = this[`_on${type}`];
+                    if (listener) this.removeEventListener(type, listener);
+                    let result = new Function('event', 'with(document){with(this){' + value + '}}');
+                    this.addEventListener(type, result);
+                    return result;
+                };
+            }
+
+            class TaskMaster extends HTMLElement
+            {
+                /*
+                static get properties() { return { name: String }; }
+                static [Cuttle.Attribute`name`]() { return String; }
+                */
+                // static get properties() { return { onboom: EventListener('boom') }; }
+                static [Cuttle.Attribute`onboom`]() { return { type: EventListener('boom') }; }
+
+                constructor()
+                {
+                    super();
+                    Cuttle.attachShadowAndTemplate(this, '#task-master');
+
+                    this.titleElement = Cuttle.find(this, '#title');
+                    this.newTaskButton = Cuttle.find(this, '#newTask');
+                }
+
+                [Cuttle.ObservedAttributeChanged`name`](attribute, prev, value) { this.titleElement.textContent = value; }
+
+                [Cuttle.EventListenerCallback('#title', 'click')](event)
+                {
+                    
+                }
+
+                onClick(e)
+                {
+                    this.dispatchEvent(new CustomEvent('boom', { composed: true }));
+                }
+            }
+            window.customElements.define('task-master', Cuttle.transform(TaskMaster));
+        </script>
+    </body>
+</html>

@@ -49,10 +49,15 @@ export class HelloWorld extends HTMLElement
 
         this.handleClick = this.handleClick.bind(this);
 
-        Cuttle.bindAttributeChanged(this, 'name', value => this.myLabel.textContent = value);
+        Cuttle.bindAttributeChanged(this, 'name', value => {
+            this.myLabel.textContent = value;
+            this.dispatchEvent(new CustomEvent('namechanged', {
+                detail: { value },
+                bubbles: false,
+                composed: true
+            }));
+        });
         Cuttle.bindAttributeChanged(this, 'disabled', this.handleDisabled);
-
-        this.dispatchEvent(new CustomEvent('namechanged'));
     }
 
     /** @override */
