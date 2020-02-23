@@ -55,11 +55,6 @@
 
                 [Cuttle.ObservedAttributeChanged`name`](attribute, prev, value) { this.titleElement.textContent = value; }
 
-                [Cuttle.EventListenerCallback('#title', 'click')](event)
-                {
-                    
-                }
-
                 onClick(e)
                 {
                     this.dispatchEvent(new CustomEvent('boom', { composed: true }));

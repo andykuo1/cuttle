@@ -1,23 +1,29 @@
 export function asString(func, strings=[], values=[])
 {
-    let fname = func.name;
-    if (typeof strings === 'string') strings = [strings];
-    return `__${strings.reduce((prev, curr, i) => prev + curr + values[i])}${fname}`;
+    const name = func.name;
+    if (typeof args[0] === 'string') args[0] = [args[0]];
+    return `__${name}::${strings.reduce((prev, curr, i) => prev + curr + values[i])}`;
 }
 
 export function getEntries(func, target)
 {
-    const fname = func.name;
-    const flength = fname.length;
-
+    const prefix = '__' + func.name + '::';
     let dst = {};
     for(let propertyName of Object.getOwnPropertyNames(target))
     {
-        if (propertyName.startsWith('__') && propertyName.endsWith(fname))
+        if (propertyName.startsWith(prefix))
         {
-            let attribute = propertyName.substring(2, propertyName.length - flength);
+            let attribute = propertyName.substring(prefix.length);
             dst[attribute] = target[propertyName];
         }
     }
     return dst;
+}
+
+export function define(name, opts)
+{
+    opts.name = name;
+    opts.tag = asString.bind(opts);
+    opts.tag.opts = opts;
+    window[name] = opts.tag;
 }
