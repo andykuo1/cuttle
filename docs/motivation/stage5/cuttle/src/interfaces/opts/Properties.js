@@ -3,7 +3,7 @@
  * @description
  * Evaluates `static get properties()` to custom element observedAttributes(), get(), and set().
  */
-import * as Properties from '../../properties.js';
+import * as Properties from '../../utils/properties.js';
 
 /** Generates the transform object for this module. */
 export function transformify(elementConstructor, properties = elementConstructor.properties)
@@ -13,18 +13,18 @@ export function transformify(elementConstructor, properties = elementConstructor
     
     return {
         // Generates get() and set()...
-        propertyMap: Properties.parsePropertiesToPropertyAccessors(properties),
+        propertyMap: Properties.getPropertyAccessorsForProperties(properties),
         // Override static observedAttributes() with properties
         observedAttributes()
         {
-            return Properties.parsePropertiesToObservedAttributes(properties);
+            return Properties.getObservedAttributesForProperties(properties);
         },
         // Override connectedCallback() with defaultProperty() and upgradeProperty()...
         connectedCallback()
         {
             for(let key of Object.keys(properties))
             {
-                Properties.setupPropertyWhenConnectedCallback.call(this, key, properties[key]);
+                Properties.preparePropertyOnConnected.call(this, key, properties[key]);
             }
         },
         // Override attributeChangedCallback() to update _property values...
@@ -32,7 +32,7 @@ export function transformify(elementConstructor, properties = elementConstructor
         {
             for(let key of Object.keys(properties))
             {
-                Properties.updatePropertyWhenAttributeChanged.call(this, key, properties[key], attribute, prev, value);
+                Properties.updatePropertyOnAttributeChanged.call(this, key, properties[key], attribute, prev, value);
             }
         }
     };

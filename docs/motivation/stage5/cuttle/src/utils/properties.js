@@ -1,8 +1,8 @@
 /** Handle cached object properties. */
-export function updatePropertyWhenAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
+export function updatePropertyOnAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
 {
-    const propertyType = getTypeForPropertyEntry(propertyEntry);
-    const parser = getParserForType(this, propertyType);
+    const propertyType = getTypeFunctionForPropertyEntry(propertyEntry);
+    const parser = getPropertyParserForType(this, propertyType);
     const key = `_${propertyName}`;
     
     const prevProp = this[key];
@@ -10,7 +10,7 @@ export function updatePropertyWhenAttributeChanged(propertyName, propertyEntry, 
 }
 
 /** Handle default and upgraded properties. */
-export function setupPropertyWhenConnectedCallback(propertyName, propertyEntry)
+export function preparePropertyOnConnected(propertyName, propertyEntry)
 {
     if (hasDefaultPropertyEntry(propertyEntry))
     {
@@ -19,12 +19,12 @@ export function setupPropertyWhenConnectedCallback(propertyName, propertyEntry)
     upgradeProperty(this, propertyName);
 }
 
-function hasDefaultPropertyEntry(propertyEntry)
+export function hasDefaultPropertyEntry(propertyEntry)
 {
     return typeof propertyEntry === 'object' && 'value' in propertyEntry;
 }
 
-function defaultProperty(self, propertyName, defaultValue)
+export function defaultProperty(self, propertyName, defaultValue)
 {
     if (!self.hasAttribute(propertyName))
     {
@@ -32,7 +32,7 @@ function defaultProperty(self, propertyName, defaultValue)
     }
 }
 
-function upgradeProperty(self, propertyName)
+export function upgradeProperty(self, propertyName)
 {
     if (self.hasOwnProperty(propertyName))
     {
@@ -56,7 +56,7 @@ const USE_CACHED_VALUES_FOR_GETTER = true;
  * 
  * It is possible that the user may want to iterate over all cached value properties, but I do not see a meaningful use case for this feature.
  */
-export function parsePropertiesToCachedObjectProperties(propertyEntries, dst = {})
+export function getCachedPropertyMapForProperties(propertyEntries, dst = {})
 {
     for(let key of Object.keys(propertyEntries))
     {
@@ -68,14 +68,14 @@ export function parsePropertiesToCachedObjectProperties(propertyEntries, dst = {
     return dst;
 }
 
-export function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
+export function getPropertyAccessorsForProperties(propertyEntries, dst = {})
 {
     for(let key of Object.keys(propertyEntries))
     {
         let propertyEntry = propertyEntries[key];
-        let type = getTypeForPropertyEntry(propertyEntry);
-        let getter = getGetterForType(this, type, key);
-        let setter = getSetterForType(this, type, key);
+        let type = getTypeFunctionForPropertyEntry(propertyEntry);
+        let getter = getPropertyGetterForType(this, type, key);
+        let setter = getPropertySetterForType(this, type, key);
 
         dst[key] = {
             get() { return getter(this); },
@@ -85,18 +85,18 @@ export function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
     return dst;
 }
 
-export function parsePropertiesToObservedAttributes(propertyEntries, dst = [])
+export function getObservedAttributesForProperties(propertyEntries, dst = [])
 {
     dst.push(...Object.keys(propertyEntries));
     return dst;
 }
 
-function getTypeForPropertyEntry(propertyEntry)
+function getTypeFunctionForPropertyEntry(propertyEntry)
 {
     return typeof propertyEntry === 'function' ? propertyEntry : propertyEntry.type;
 }
 
-function getParserForType(context, type)
+export function getPropertyParserForType(context, type)
 {
     switch(type)
     {
@@ -108,7 +108,7 @@ function getParserForType(context, type)
     }
 }
 
-function getGetterForType(context, type, ...bindArgs)
+export function getPropertyGetterForType(context, type, key)
 {
     if (USE_CACHED_VALUES_FOR_GETTER)
     {
@@ -122,12 +122,12 @@ function getGetterForType(context, type, ...bindArgs)
             case Boolean: return booleanGetter;
             case Function: return functionGetter;
             case Number: return numberGetter;
-            default: return customGetter.bind(context, type, ...bindArgs);
+            default: return customGetter.bind(context, type, key);
         }
     }
 }
 
-function getSetterForType(context, type, ...bindArgs)
+export function getPropertySetterForType(context, type, key)
 {
     switch(type)
     {
@@ -135,7 +135,7 @@ function getSetterForType(context, type, ...bindArgs)
         case Boolean: return booleanSetter;
         case Function: return functionSetter;
         case Number: return numberSetter;
-        default: return customSetter.bind(context, type, ...bindArgs);
+        default: return customSetter.bind(context, type, key);
     }
 }
 

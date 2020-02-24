@@ -3,8 +3,8 @@ import * as Transformer from './transformer.js';
 import * as OptProperties from './interfaces/opts/Properties.js';
 
 import * as Middleware from './interfaces/middleware/Middleware.js';
-import './middleware/ObservedAttributes.js';
-import './middleware/Properties.js';
+import './interfaces/middleware/ObservedAttributes.js';
+import './interfaces/middleware/Properties.js';
 
 export function transform(elementConstructor)
 {
@@ -17,3 +17,4 @@ export function transform(elementConstructor)
 export * from './utils/shadow.js';
 export * from './utils/find.js';
 export * from './utils/types.js';
+export * from './utils/properties.js';

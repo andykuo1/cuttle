@@ -302,10 +302,10 @@
     }
 
     /** Handle cached object properties. */
-    function updatePropertyWhenAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
+    function updatePropertyOnAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
     {
-        const propertyType = getTypeForPropertyEntry(propertyEntry);
-        const parser = getParserForType(this, propertyType);
+        const propertyType = getTypeFunctionForPropertyEntry(propertyEntry);
+        const parser = getPropertyParserForType(this, propertyType);
         const key = `_${propertyName}`;
         
         const prevProp = this[key];
@@ -313,7 +313,7 @@
     }
 
     /** Handle default and upgraded properties. */
-    function setupPropertyWhenConnectedCallback(propertyName, propertyEntry)
+    function preparePropertyOnConnected(propertyName, propertyEntry)
     {
         if (hasDefaultPropertyEntry(propertyEntry))
         {
@@ -345,14 +345,36 @@
         }
     }
 
-    function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
+    /**
+     * @deprecated
+     * Generates properties in the form `_propertyName` to serve as cached values.
+     * 
+     * Called to initialize cached properties in the constructor. However, values will be assigned during connectedCallback(), not in the constructor,
+     * therefore the property is never used meaningfully besides user-defined property assignment, which will define the property in of itself. Because of
+     * that, it renders this process useless.
+     * 
+     * It is possible that the user may want to iterate over all cached value properties, but I do not see a meaningful use case for this feature.
+     */
+    function getCachedPropertyMapForProperties(propertyEntries, dst = {})
+    {
+        for(let key of Object.keys(propertyEntries))
+        {
+            // Create cached getter value
+            dst[`_${key}`] = {
+                writable: true
+            };
+        }
+        return dst;
+    }
+
+    function getPropertyAccessorsForProperties(propertyEntries, dst = {})
     {
         for(let key of Object.keys(propertyEntries))
         {
             let propertyEntry = propertyEntries[key];
-            let type = getTypeForPropertyEntry(propertyEntry);
-            let getter = getGetterForType(this, type, key);
-            let setter = getSetterForType(this, type, key);
+            let type = getTypeFunctionForPropertyEntry(propertyEntry);
+            let getter = getPropertyGetterForType();
+            let setter = getPropertySetterForType(this, type, key);
 
             dst[key] = {
                 get() { return getter(this); },
@@ -362,18 +384,18 @@
         return dst;
     }
 
-    function parsePropertiesToObservedAttributes(propertyEntries, dst = [])
+    function getObservedAttributesForProperties(propertyEntries, dst = [])
     {
         dst.push(...Object.keys(propertyEntries));
         return dst;
     }
 
-    function getTypeForPropertyEntry(propertyEntry)
+    function getTypeFunctionForPropertyEntry(propertyEntry)
     {
         return typeof propertyEntry === 'function' ? propertyEntry : propertyEntry.type;
     }
 
-    function getParserForType(context, type)
+    function getPropertyParserForType(context, type)
     {
         switch(type)
         {
@@ -385,14 +407,14 @@
         }
     }
 
-    function getGetterForType(context, type, ...bindArgs)
+    function getPropertyGetterForType(context, type, key)
     {
         {
             return cachedGetter;
         }
     }
 
-    function getSetterForType(context, type, ...bindArgs)
+    function getPropertySetterForType(context, type, key)
     {
         switch(type)
         {
@@ -400,7 +422,7 @@
             case Boolean: return booleanSetter;
             case Function: return functionSetter;
             case Number: return numberSetter;
-            default: return customSetter.bind(context, type, ...bindArgs);
+            default: return customSetter.bind(context, type, key);
         }
     }
 
@@ -432,18 +454,18 @@
         
         return {
             // Generates get() and set()...
-            propertyMap: parsePropertiesToPropertyAccessors(properties),
+            propertyMap: getPropertyAccessorsForProperties(properties),
             // Override static observedAttributes() with properties
             observedAttributes()
             {
-                return parsePropertiesToObservedAttributes(properties);
+                return getObservedAttributesForProperties(properties);
             },
             // Override connectedCallback() with defaultProperty() and upgradeProperty()...
             connectedCallback()
             {
                 for(let key of Object.keys(properties))
                 {
-                    setupPropertyWhenConnectedCallback.call(this, key, properties[key]);
+                    preparePropertyOnConnected.call(this, key, properties[key]);
                 }
             },
             // Override attributeChangedCallback() to update _property values...
@@ -451,7 +473,7 @@
             {
                 for(let key of Object.keys(properties))
                 {
-                    updatePropertyWhenAttributeChanged.call(this, key, properties[key], attribute, prev, value);
+                    updatePropertyOnAttributeChanged.call(this, key, properties[key], attribute, prev, value);
                 }
             }
         };
@@ -506,19 +528,19 @@
         const propertyType = callback.call(this);
         const properties = { [key]: propertyType };
         let result = {
-            propertyMap: parsePropertiesToPropertyAccessors(properties),
+            propertyMap: getPropertyAccessorsForProperties(properties),
             observedAttributes()
             {
-                return parsePropertiesToObservedAttributes(properties);
+                return getObservedAttributesForProperties(properties);
             },
             connectedCallback()
             {
-                setupPropertyWhenConnectedCallback.call(this, key, propertyType);
+                preparePropertyOnConnected.call(this, key, propertyType);
             },
             attributeChangedTestCases: {
                 [key](attribute, prev, value)
                 {
-                    updatePropertyWhenAttributeChanged.call(this, key, propertyType, attribute, prev, value);
+                    updatePropertyOnAttributeChanged.call(this, key, propertyType, attribute, prev, value);
                 }
             }
         };
@@ -614,9 +636,20 @@
     exports.attachShadowAndTemplate = attachShadowAndTemplate;
     exports.createStyle = createStyle;
     exports.createTemplate = createTemplate;
+    exports.defaultProperty = defaultProperty;
     exports.find = find;
     exports.findAll = findAll;
+    exports.getCachedPropertyMapForProperties = getCachedPropertyMapForProperties;
+    exports.getObservedAttributesForProperties = getObservedAttributesForProperties;
+    exports.getPropertyAccessorsForProperties = getPropertyAccessorsForProperties;
+    exports.getPropertyGetterForType = getPropertyGetterForType;
+    exports.getPropertyParserForType = getPropertyParserForType;
+    exports.getPropertySetterForType = getPropertySetterForType;
+    exports.hasDefaultPropertyEntry = hasDefaultPropertyEntry;
+    exports.preparePropertyOnConnected = preparePropertyOnConnected;
     exports.transform = transform;
+    exports.updatePropertyOnAttributeChanged = updatePropertyOnAttributeChanged;
+    exports.upgradeProperty = upgradeProperty;
 
     Object.defineProperty(exports, '__esModule', { value: true });
 
