@@ -11,62 +11,88 @@
         let observedAttributesFunctions = [];
         let connectedCallbackFunctions = [];
         let disconnectedCallbackFunctions = [];
+        let adoptedCallbackFunctions = [];
         let attributeChangedCallbackFunctions = [];
+        let attributeChangedCallbackTestCases = {};
 
         for(let transformation of transformations)
         {
+            if (Array.isArray(transformation))
+            {
+                transformations.push(...transformation);
+                continue;
+            }
+
             const {
-                classStaticPropertyMap,
-                classPropertyMap,
+                staticPropertyMap,
+                propertyMap,
                 observedAttributes,
                 connectedCallback,
                 disconnectedCallback,
-                attributeChangedCallback
+                adoptedCallback,
+                attributeChangedCallback,
+                attributeChangedTestCases,
             } = transformation;
 
-            if (classStaticPropertyMap)
+            if (staticPropertyMap)
             {
-                for(const classStaticPropertyName of Object.keys(classStaticPropertyMap))
+                for(const staticPropertyName of Object.keys(staticPropertyMap))
                 {
-                    if (elementConstructor.hasOwnProperty(classStaticPropertyName))
+                    if (elementConstructor.hasOwnProperty(staticPropertyName))
                     {
-                        throw new Error(`Cannot override existing property '${classStaticPropertyName}'.`);
+                        throw new Error(`Cannot override existing property '${staticPropertyName}'.`);
                         // Or let the user override our definitions...
-                        // delete classStaticPropertyMap[classStaticPropertyName];
+                        // delete staticPropertyMap[staticPropertyName];
                     }
                 }
 
-                Object.defineProperties(elementConstructor, classStaticPropertyMap);
+                Object.defineProperties(elementConstructor, staticPropertyMap);
             }
 
-            if (classPropertyMap)
+            if (propertyMap)
             {
-                for(const classPropertyName of Object.keys(classPropertyMap))
+                for(const propertyName of Object.keys(propertyMap))
                 {
-                    if (elementPrototype.hasOwnProperty(classPropertyName))
+                    if (elementPrototype.hasOwnProperty(propertyName))
                     {
-                        throw new Error(`Cannot override existing property '${classPropertyName}'.`);
+                        throw new Error(`Cannot override existing property '${propertyName}'.`);
                         // Or let the user override our definitions...
-                        // delete classPropertyMap[classPropertyName];
+                        // delete propertyMap[propertyName];
                     }
                 }
 
-                Object.defineProperties(elementPrototype, classPropertyMap);
+                Object.defineProperties(elementPrototype, propertyMap);
             }
 
             if (Array.isArray(observedAttributes)) observedAttributesFunctions.push(...observedAttributes);
             else if (observedAttributes) observedAttributesFunctions.push(observedAttributes);
+            
             if (Array.isArray(connectedCallback)) connectedCallbackFunctions.push(...connectedCallback);
             else if (connectedCallback) connectedCallbackFunctions.push(connectedCallback);
+
             if (Array.isArray(disconnectedCallback)) disconnectedCallbackFunctions.push(...disconnectedCallback);
             else if (disconnectedCallback) disconnectedCallbackFunctions.push(disconnectedCallback);
+
+            if (Array.isArray(adoptedCallback)) adoptedCallbackFunctions.push(...adoptedCallback);
+            else if (adoptedCallback) adoptedCallbackFunctions.push(adoptedCallback);
+
             if (Array.isArray(attributeChangedCallback)) attributeChangedCallbackFunctions.push(...attributeChangedCallback);
             else if (attributeChangedCallback) attributeChangedCallbackFunctions.push(attributeChangedCallback);
+            
+            if (attributeChangedTestCases) Object.assign(attributeChangedCallbackTestCases, attributeChangedTestCases);
+        }
+
+        if (Object.keys(attributeChangedCallbackTestCases).length > 0)
+        {
+            attributeChangedCallbackFunctions.push(function attributeChangedCallback(attribute, prev, value) {
+                return attributeChangedCallbackTestCases[attribute].call(this, attribute, prev, value);
+            });
         }
 
         injectObservedAttributes(elementConstructor, ...observedAttributesFunctions);
         injectConnectedCallback(elementConstructor, ...connectedCallbackFunctions);
         injectDisconnectedCallback(elementConstructor, ...disconnectedCallbackFunctions);
+        injectAdoptedCallback(elementConstructor, ...adoptedCallbackFunctions);
         injectAttributeChangedCallback(elementConstructor, ...attributeChangedCallbackFunctions);
 
         return elementConstructor;
@@ -77,6 +103,7 @@
     const OWN_ATTRIBUTE_CHANGED_CALLBACK = Symbol('ownAttributeChangedCallback');
     const OWN_CONNECTED_CALLBACK = Symbol('ownConnectedCallback');
     const OWN_DISCONNECTED_CALLBACK = Symbol('ownDisconnectedCallback');
+    const OWN_ADOPTED_CALLBACK = Symbol('ownAdoptedCallback');
 
     function getOwnObservedAttributes(elementConstructor)
     {
@@ -91,6 +118,11 @@
     function getOwnDisconnectedCallback(elementConstructor)
     {
         return Object.getOwnPropertyDescriptor(elementConstructor.prototype, OWN_DISCONNECTED_CALLBACK).value;
+    }
+
+    function getOwnAdoptedCallback(elementConstructor)
+    {
+        return Object.getOwnPropertyDescriptor(elementConstructor.prototype, OWN_CONNECTED_CALLBACK).value;
     }
 
     function getOwnAttributeChangedCallback(elementConstructor)
@@ -172,6 +204,29 @@
         }
     }
 
+    function injectAdoptedCallback(elementConstructor, ...callbacks)
+    {
+        _injectPropertyValue(
+            elementConstructor.prototype,
+            'adoptedCallback',
+            OWN_ADOPTED_CALLBACK,
+            createAdoptedCallbackFunction(callbacks)
+        );
+
+        function createAdoptedCallbackFunction(callbacks)
+        {
+            return function adoptedCallback()
+            {
+                const ownAdoptedCallback = getOwnAdoptedCallback(getConstructorOf(this));
+                for(let callback of callbacks)
+                {
+                    callback.call(this);
+                }
+                ownAdoptedCallback.call(this);
+            }
+        }
+    }
+
     function injectAttributeChangedCallback(elementConstructor, ...callbacks)
     {
         _injectPropertyValue(
@@ -246,111 +301,48 @@
         Object.defineProperty(propertyOwner, propertyName, { value });
     }
 
-    /**
-     * @module Properties
-     * @description
-     * Evaluates `static get properties()` to custom element observedAttributes(), get(), and set().
-     */
-
-    /** Generates the transform object for this module. */
-    function transformify(elementConstructor, properties = elementConstructor.properties)
-    {
-        if (!(elementConstructor.prototype instanceof HTMLElement)) throw new Error('Custom elements must extend HTMLElement.');
-        if (!properties) return {};
-        
-        let classPropertyMap = {};
-        // Generates get() and set()...
-        parsePropertiesToPropertyAccessors(properties, classPropertyMap);
-        
-        return {
-            classPropertyMap,
-            // Override static observedAttributes() with properties
-            observedAttributes: getObservedAttributesFunctionsForProperties(properties),
-            // Override connectedCallback() with defaultProperty() and upgradeProperty()...
-            connectedCallback: getConnectedCallbackFunctionsForProperties(properties),
-            // Override attributeChangedCallback() to update _property values...
-            attributeChangedCallback: getAttributeChangedCallbackFunctionsForProperties(properties)
-        };
-    }
-
     /** Handle cached object properties. */
-
-    function getAttributeChangedCallbackFunctionsForProperties(propertyEntries)
+    function updatePropertyWhenAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
     {
-        return [
-            function attributeChangedProperty(attribute, prev, value)
-            {
-                if (propertyEntries.hasOwnProperty(attribute))
-                {
-                    const propertyEntry = propertyEntries[attribute];
-                    const propertyType = getTypeForPropertyEntry(propertyEntry);
-                    const parser = getParserForType(this, propertyType);
-                    const key = `_${attribute}`;
-                    
-                    const prevProp = this[key];
-                    const nextProp = this[key] = parser.call(this, value);
-                }
-            }
-        ];
+        const propertyType = getTypeForPropertyEntry(propertyEntry);
+        const parser = getParserForType(this, propertyType);
+        const key = `_${propertyName}`;
+        
+        const prevProp = this[key];
+        const nextProp = this[key] = parser.call(this, value);
     }
 
     /** Handle default and upgraded properties. */
-
-    function getConnectedCallbackFunctionsForProperties(propertyEntries)
+    function setupPropertyWhenConnectedCallback(propertyName, propertyEntry)
     {
-        function hasDefaultPropertyEntry(propertyEntry)
+        if (hasDefaultPropertyEntry(propertyEntry))
         {
-            return typeof propertyEntry === 'object' && 'value' in propertyEntry;
+            defaultProperty(this, propertyName, propertyEntry.value);
         }
-        
-        function defaultProperty(self, propertyName, defaultValue)
-        {
-            if (!self.hasAttribute(propertyName))
-            {
-                self.setAttribute(propertyName, defaultValue);
-            }
-        }
-        
-        function upgradeProperty(self, propertyName)
-        {
-            if (self.hasOwnProperty(propertyName))
-            {
-                let value = self[propertyName];
-                delete self[propertyName];
-                self[propertyName] = value;
-            }
-        }
-
-        return [
-            function connectedDefaultProperties()
-            {
-                for(let key of Object.keys(propertyEntries))
-                {
-                    let propertyEntry = propertyEntries[key];
-                    if (hasDefaultPropertyEntry(propertyEntry))
-                    {
-                        defaultProperty(this, key, propertyEntry.value);
-                    }
-                }
-            },
-            function connectedUpgradeProperties()
-            {
-                for(let key of Object.keys(propertyEntries))
-                {
-                    upgradeProperty(this, key);
-                }
-            },
-        ];
+        upgradeProperty(this, propertyName);
     }
 
-    function getObservedAttributesFunctionsForProperties(propertyEntries)
+    function hasDefaultPropertyEntry(propertyEntry)
     {
-        return [
-            function observedAttributesProperties()
-            {
-                return Object.keys(propertyEntries);
-            }
-        ];
+        return typeof propertyEntry === 'object' && 'value' in propertyEntry;
+    }
+
+    function defaultProperty(self, propertyName, defaultValue)
+    {
+        if (!self.hasAttribute(propertyName))
+        {
+            self.setAttribute(propertyName, defaultValue);
+        }
+    }
+
+    function upgradeProperty(self, propertyName)
+    {
+        if (self.hasOwnProperty(propertyName))
+        {
+            let value = self[propertyName];
+            delete self[propertyName];
+            self[propertyName] = value;
+        }
     }
 
     function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
@@ -367,6 +359,12 @@
                 set(value) { setter(this, value); }
             };
         }
+        return dst;
+    }
+
+    function parsePropertiesToObservedAttributes(propertyEntries, dst = [])
+    {
+        dst.push(...Object.keys(propertyEntries));
         return dst;
     }
 
@@ -420,97 +418,112 @@
     function numberParser(value) { return Number(value); }
     function customParser(parser, value) { return parser.call(this, value); }
 
-    function asString(func, strings, values)
-    {
-        let fname = func.name;
-        if (typeof strings === 'string') strings = [strings];
-        return `__${strings.reduce((prev, curr, i) => prev + curr + values[i])}${fname}`;
-    }
+    /**
+     * @module Properties
+     * @description
+     * Evaluates `static get properties()` to custom element observedAttributes(), get(), and set().
+     */
 
-    function getEntries(func, target)
+    /** Generates the transform object for this module. */
+    function transformify(elementConstructor, properties = elementConstructor.properties)
     {
-        const fname = func.name;
-        const flength = fname.length;
-
-        let dst = {};
-        for(let propertyName of Object.getOwnPropertyNames(target))
-        {
-            if (propertyName.startsWith('__') && propertyName.endsWith(fname))
+        if (!(elementConstructor.prototype instanceof HTMLElement)) throw new Error('Custom elements must extend HTMLElement.');
+        if (!properties) return {};
+        
+        return {
+            // Generates get() and set()...
+            propertyMap: parsePropertiesToPropertyAccessors(properties),
+            // Override static observedAttributes() with properties
+            observedAttributes()
             {
-                let attribute = propertyName.substring(2, propertyName.length - flength);
-                dst[attribute] = target[propertyName];
+                return parsePropertiesToObservedAttributes(properties);
+            },
+            // Override connectedCallback() with defaultProperty() and upgradeProperty()...
+            connectedCallback()
+            {
+                for(let key of Object.keys(properties))
+                {
+                    setupPropertyWhenConnectedCallback.call(this, key, properties[key]);
+                }
+            },
+            // Override attributeChangedCallback() to update _property values...
+            attributeChangedCallback(attribute, prev, value)
+            {
+                for(let key of Object.keys(properties))
+                {
+                    updatePropertyWhenAttributeChanged.call(this, key, properties[key], attribute, prev, value);
+                }
             }
-        }
-        return dst;
+        };
     }
 
-    // static [Attribute`name`]() { return String; }
-    function Attribute(strings, ...values)
+    const middlewares = {};
+
+    function define(name, middleware)
     {
-        return asString(Attribute, strings, values);
+        if (name in middlewares) return;
+        middlewares[name] = middleware;
+        window[name] = tag.bind(undefined, name);
+    }
+
+    function tag(name, ...args)
+    {
+        if (typeof args[0] === 'string') args[0] = [args[0]];
+        return `__${name}::${args[0].reduce((prev, curr, i) => prev + curr + args[i + 1])}`;
     }
 
     function transformify$1(elementConstructor)
     {
-        if (!(elementConstructor.prototype instanceof HTMLElement)) throw new Error('Custom elements must extend HTMLElement.');
+        let transforms = [];
 
-        let entries = getEntries(Attribute, elementConstructor);
-
-        let properties = {};
-        for(let name of Object.keys(entries))
+        let elementPrototype = elementConstructor.prototype;
+        for(let propertyName of Object.getOwnPropertyNames(elementPrototype))
         {
-            properties[name] = entries[name].call(undefined);
-        }
-        return transformify(elementConstructor, properties);
-    }
-
-    function ObservedAttributeChanged(strings, ...values)
-    {
-        return asString(ObservedAttributeChanged, strings, values);
-    }
-
-    const OBSERVED_ATTRIBUTES_CALLBACK_MAP = Symbol('observedAttributesCallbackMap');
-
-    function transformify$2(elementConstructor)
-    {
-        if (!(elementConstructor.prototype instanceof HTMLElement)) throw new Error('Custom elements must extend HTMLElement.');
-
-        // Generates individual callbacks for attributeChangedCallback() with ObservedAttributeChanged()...
-        const entries = getEntries(ObservedAttributeChanged, elementConstructor.prototype);
-
-        return {
-            classStaticPropertyMap: {
-                [OBSERVED_ATTRIBUTES_CALLBACK_MAP]: { value: entries }
-            },
-            observedAttributes: getObservedAttributesFunctionsForObservedAttributes(),
-            attributeChangedCallback: getAttributeChangedCallbackForObservedAttributes(),
-        };
-    }
-
-    function getObservedAttributesFunctionsForObservedAttributes()
-    {
-        return [
-            function observedAttributes()
+            let index = propertyName.indexOf('::');
+            if (propertyName.startsWith('__') && index > 2)
             {
-                const observedAttributeCallbacks = this[OBSERVED_ATTRIBUTES_CALLBACK_MAP];
-                return Object.keys(observedAttributeCallbacks);
+                let name = propertyName.substring(2, index);
+                let key = propertyName.substring(index + 2);
+                let callback = elementPrototype[propertyName];
+                let result = middlewares[name].call(elementConstructor, key, callback);
+                transforms.push(result);
             }
-        ];
+        }
+        
+        return transforms;
     }
 
-    function getAttributeChangedCallbackForObservedAttributes()
-    {
-        return [
-            function attributeChangedCallback(attribute, prev, value)
+    define('ObservedAttributeChanged', function(key, callback) {
+        return {
+            observedAttributes() { return [key]; },
+            attributeChangedTestCases: {
+                [key]: callback
+            }
+        };
+    });
+
+    define('Property', function(key, callback) {
+        const propertyType = callback.call(this);
+        const properties = { [key]: propertyType };
+        let result = {
+            propertyMap: parsePropertiesToPropertyAccessors(properties),
+            observedAttributes()
             {
-                const observedAttributeCallbacks = this.constructor[OBSERVED_ATTRIBUTES_CALLBACK_MAP];
-                if (observedAttributeCallbacks.hasOwnProperty(attribute))
+                return parsePropertiesToObservedAttributes(properties);
+            },
+            connectedCallback()
+            {
+                setupPropertyWhenConnectedCallback.call(this, key, propertyType);
+            },
+            attributeChangedTestCases: {
+                [key](attribute, prev, value)
                 {
-                    observedAttributeCallbacks[attribute].call(this, attribute, prev, value);
+                    updatePropertyWhenAttributeChanged.call(this, key, propertyType, attribute, prev, value);
                 }
             }
-        ];
-    }
+        };
+        return result;
+    });
 
     function createTemplate(innerHTML)
     {
@@ -576,17 +589,28 @@
         return element.shadowRoot.querySelectorAll(selectors);
     }
 
+    function EventListener(type)
+    {
+        if (!type) throw new Error('Event type must be defined.');
+        return function EventListener(value)
+        {
+            let listener = this[`_on${type}`];
+            if (listener) this.removeEventListener(type, listener);
+            let result = new Function('event', 'with(document){with(this){' + value + '}}');
+            this.addEventListener(type, result);
+            return result;
+        };
+    }
+
     function transform(elementConstructor)
     {
         return applyTransformations(elementConstructor,
             transformify(elementConstructor),
             transformify$1(elementConstructor),
-            transformify$2(elementConstructor),
         );
     }
 
-    exports.Attribute = Attribute;
-    exports.ObservedAttributeChanged = ObservedAttributeChanged;
+    exports.EventListener = EventListener;
     exports.attachShadowAndTemplate = attachShadowAndTemplate;
     exports.createStyle = createStyle;
     exports.createTemplate = createTemplate;

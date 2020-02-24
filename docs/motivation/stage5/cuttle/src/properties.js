@@ -1,108 +1,45 @@
-/**
- * @module Properties
- * @description
- * Evaluates `static get properties()` to custom element observedAttributes(), get(), and set().
- */
-
-/** Generates the transform object for this module. */
-export function transformify(elementConstructor, properties = elementConstructor.properties)
-{
-    if (!(elementConstructor.prototype instanceof HTMLElement)) throw new Error('Custom elements must extend HTMLElement.');
-    if (!properties) return {};
-    
-    let classPropertyMap = {};
-    // Generates get() and set()...
-    parsePropertiesToPropertyAccessors(properties, classPropertyMap);
-    
-    return {
-        classPropertyMap,
-        // Override static observedAttributes() with properties
-        observedAttributes: getObservedAttributesFunctionsForProperties(properties),
-        // Override connectedCallback() with defaultProperty() and upgradeProperty()...
-        connectedCallback: getConnectedCallbackFunctionsForProperties(properties),
-        // Override attributeChangedCallback() to update _property values...
-        attributeChangedCallback: getAttributeChangedCallbackFunctionsForProperties(properties)
-    };
-}
-
 /** Handle cached object properties. */
-
-function getAttributeChangedCallbackFunctionsForProperties(propertyEntries)
+export function updatePropertyWhenAttributeChanged(propertyName, propertyEntry, attribute, prev, value)
 {
-    return [
-        function attributeChangedProperty(attribute, prev, value)
-        {
-            if (propertyEntries.hasOwnProperty(attribute))
-            {
-                const propertyEntry = propertyEntries[attribute];
-                const propertyType = getTypeForPropertyEntry(propertyEntry);
-                const parser = getParserForType(this, propertyType);
-                const key = `_${attribute}`;
-                
-                const prevProp = this[key];
-                const nextProp = this[key] = parser.call(this, value);
-            }
-        }
-    ];
+    const propertyType = getTypeForPropertyEntry(propertyEntry);
+    const parser = getParserForType(this, propertyType);
+    const key = `_${propertyName}`;
+    
+    const prevProp = this[key];
+    const nextProp = this[key] = parser.call(this, value);
 }
 
 /** Handle default and upgraded properties. */
-
-function getConnectedCallbackFunctionsForProperties(propertyEntries)
+export function setupPropertyWhenConnectedCallback(propertyName, propertyEntry)
 {
-    function hasDefaultPropertyEntry(propertyEntry)
+    if (hasDefaultPropertyEntry(propertyEntry))
     {
-        return typeof propertyEntry === 'object' && 'value' in propertyEntry;
+        defaultProperty(this, propertyName, propertyEntry.value);
     }
-    
-    function defaultProperty(self, propertyName, defaultValue)
-    {
-        if (!self.hasAttribute(propertyName))
-        {
-            self.setAttribute(propertyName, defaultValue);
-        }
-    }
-    
-    function upgradeProperty(self, propertyName)
-    {
-        if (self.hasOwnProperty(propertyName))
-        {
-            let value = self[propertyName];
-            delete self[propertyName];
-            self[propertyName] = value;
-        }
-    }
-
-    return [
-        function connectedDefaultProperties()
-        {
-            for(let key of Object.keys(propertyEntries))
-            {
-                let propertyEntry = propertyEntries[key];
-                if (hasDefaultPropertyEntry(propertyEntry))
-                {
-                    defaultProperty(this, key, propertyEntry.value);
-                }
-            }
-        },
-        function connectedUpgradeProperties()
-        {
-            for(let key of Object.keys(propertyEntries))
-            {
-                upgradeProperty(this, key);
-            }
-        },
-    ];
+    upgradeProperty(this, propertyName);
 }
 
-function getObservedAttributesFunctionsForProperties(propertyEntries)
+function hasDefaultPropertyEntry(propertyEntry)
 {
-    return [
-        function observedAttributesProperties()
-        {
-            return Object.keys(propertyEntries);
-        }
-    ];
+    return typeof propertyEntry === 'object' && 'value' in propertyEntry;
+}
+
+function defaultProperty(self, propertyName, defaultValue)
+{
+    if (!self.hasAttribute(propertyName))
+    {
+        self.setAttribute(propertyName, defaultValue);
+    }
+}
+
+function upgradeProperty(self, propertyName)
+{
+    if (self.hasOwnProperty(propertyName))
+    {
+        let value = self[propertyName];
+        delete self[propertyName];
+        self[propertyName] = value;
+    }
 }
 
 /** Parse static properties() to observedAttributes() and generate getters / setters. */
@@ -119,7 +56,7 @@ const USE_CACHED_VALUES_FOR_GETTER = true;
  * 
  * It is possible that the user may want to iterate over all cached value properties, but I do not see a meaningful use case for this feature.
  */
-function parsePropertiesToCachedObjectProperties(propertyEntries, dst = {})
+export function parsePropertiesToCachedObjectProperties(propertyEntries, dst = {})
 {
     for(let key of Object.keys(propertyEntries))
     {
@@ -131,7 +68,7 @@ function parsePropertiesToCachedObjectProperties(propertyEntries, dst = {})
     return dst;
 }
 
-function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
+export function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
 {
     for(let key of Object.keys(propertyEntries))
     {
@@ -145,6 +82,12 @@ function parsePropertiesToPropertyAccessors(propertyEntries, dst = {})
             set(value) { setter(this, value); }
         };
     }
+    return dst;
+}
+
+export function parsePropertiesToObservedAttributes(propertyEntries, dst = [])
+{
+    dst.push(...Object.keys(propertyEntries));
     return dst;
 }
 

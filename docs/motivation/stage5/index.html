@@ -22,19 +22,6 @@
             </ul>
         </template>
         <script>
-            function EventListener(type)
-            {
-                if (!type) throw new Error('Event type must be defined.');
-                return function EventListener(value)
-                {
-                    let listener = this[`_on${type}`];
-                    if (listener) this.removeEventListener(type, listener);
-                    let result = new Function('event', 'with(document){with(this){' + value + '}}');
-                    this.addEventListener(type, result);
-                    return result;
-                };
-            }
-
             class TaskMaster extends HTMLElement
             {
                 /*
@@ -42,7 +29,6 @@
                 static [Cuttle.Attribute`name`]() { return String; }
                 */
                 // static get properties() { return { onboom: EventListener('boom') }; }
-                static [Cuttle.Attribute`onboom`]() { return { type: EventListener('boom') }; }
 
                 constructor()
                 {
@@ -53,7 +39,8 @@
                     this.newTaskButton = Cuttle.find(this, '#newTask');
                 }
 
-                [Cuttle.ObservedAttributeChanged`name`](attribute, prev, value) { this.titleElement.textContent = value; }
+                [Property`onboom`]() { return Cuttle.EventListener('boom'); }
+                [ObservedAttributeChanged`name`](attribute, prev, value) { this.titleElement.textContent = value; }
 
                 onClick(e)
                 {

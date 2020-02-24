@@ -5,62 +5,88 @@ export function applyTransformations(elementConstructor, ...transformations)
     let observedAttributesFunctions = [];
     let connectedCallbackFunctions = [];
     let disconnectedCallbackFunctions = [];
+    let adoptedCallbackFunctions = [];
     let attributeChangedCallbackFunctions = [];
+    let attributeChangedCallbackTestCases = {};
 
     for(let transformation of transformations)
     {
+        if (Array.isArray(transformation))
+        {
+            transformations.push(...transformation);
+            continue;
+        }
+
         const {
-            classStaticPropertyMap,
-            classPropertyMap,
+            staticPropertyMap,
+            propertyMap,
             observedAttributes,
             connectedCallback,
             disconnectedCallback,
-            attributeChangedCallback
+            adoptedCallback,
+            attributeChangedCallback,
+            attributeChangedTestCases,
         } = transformation;
 
-        if (classStaticPropertyMap)
+        if (staticPropertyMap)
         {
-            for(const classStaticPropertyName of Object.keys(classStaticPropertyMap))
+            for(const staticPropertyName of Object.keys(staticPropertyMap))
             {
-                if (elementConstructor.hasOwnProperty(classStaticPropertyName))
+                if (elementConstructor.hasOwnProperty(staticPropertyName))
                 {
-                    throw new Error(`Cannot override existing property '${classStaticPropertyName}'.`);
+                    throw new Error(`Cannot override existing property '${staticPropertyName}'.`);
                     // Or let the user override our definitions...
-                    // delete classStaticPropertyMap[classStaticPropertyName];
+                    // delete staticPropertyMap[staticPropertyName];
                 }
             }
 
-            Object.defineProperties(elementConstructor, classStaticPropertyMap);
+            Object.defineProperties(elementConstructor, staticPropertyMap);
         }
 
-        if (classPropertyMap)
+        if (propertyMap)
         {
-            for(const classPropertyName of Object.keys(classPropertyMap))
+            for(const propertyName of Object.keys(propertyMap))
             {
-                if (elementPrototype.hasOwnProperty(classPropertyName))
+                if (elementPrototype.hasOwnProperty(propertyName))
                 {
-                    throw new Error(`Cannot override existing property '${classPropertyName}'.`);
+                    throw new Error(`Cannot override existing property '${propertyName}'.`);
                     // Or let the user override our definitions...
-                    // delete classPropertyMap[classPropertyName];
+                    // delete propertyMap[propertyName];
                 }
             }
 
-            Object.defineProperties(elementPrototype, classPropertyMap);
+            Object.defineProperties(elementPrototype, propertyMap);
         }
 
         if (Array.isArray(observedAttributes)) observedAttributesFunctions.push(...observedAttributes);
         else if (observedAttributes) observedAttributesFunctions.push(observedAttributes);
+        
         if (Array.isArray(connectedCallback)) connectedCallbackFunctions.push(...connectedCallback);
         else if (connectedCallback) connectedCallbackFunctions.push(connectedCallback);
+
         if (Array.isArray(disconnectedCallback)) disconnectedCallbackFunctions.push(...disconnectedCallback);
         else if (disconnectedCallback) disconnectedCallbackFunctions.push(disconnectedCallback);
+
+        if (Array.isArray(adoptedCallback)) adoptedCallbackFunctions.push(...adoptedCallback);
+        else if (adoptedCallback) adoptedCallbackFunctions.push(adoptedCallback);
+
         if (Array.isArray(attributeChangedCallback)) attributeChangedCallbackFunctions.push(...attributeChangedCallback);
         else if (attributeChangedCallback) attributeChangedCallbackFunctions.push(attributeChangedCallback);
+        
+        if (attributeChangedTestCases) Object.assign(attributeChangedCallbackTestCases, attributeChangedTestCases);
+    }
+
+    if (Object.keys(attributeChangedCallbackTestCases).length > 0)
+    {
+        attributeChangedCallbackFunctions.push(function attributeChangedCallback(attribute, prev, value) {
+            return attributeChangedCallbackTestCases[attribute].call(this, attribute, prev, value);
+        });
     }
 
     injectObservedAttributes(elementConstructor, ...observedAttributesFunctions);
     injectConnectedCallback(elementConstructor, ...connectedCallbackFunctions);
     injectDisconnectedCallback(elementConstructor, ...disconnectedCallbackFunctions);
+    injectAdoptedCallback(elementConstructor, ...adoptedCallbackFunctions);
     injectAttributeChangedCallback(elementConstructor, ...attributeChangedCallbackFunctions);
 
     return elementConstructor;
@@ -71,6 +97,7 @@ const OWN_CACHED_OBSERVED_ATTRIBUTES = Symbol('ownCachedObservedAttributes');
 const OWN_ATTRIBUTE_CHANGED_CALLBACK = Symbol('ownAttributeChangedCallback');
 const OWN_CONNECTED_CALLBACK = Symbol('ownConnectedCallback');
 const OWN_DISCONNECTED_CALLBACK = Symbol('ownDisconnectedCallback');
+const OWN_ADOPTED_CALLBACK = Symbol('ownAdoptedCallback');
 
 function getOwnObservedAttributes(elementConstructor)
 {
@@ -85,6 +112,11 @@ function getOwnConnectedCallback(elementConstructor)
 function getOwnDisconnectedCallback(elementConstructor)
 {
     return Object.getOwnPropertyDescriptor(elementConstructor.prototype, OWN_DISCONNECTED_CALLBACK).value;
+}
+
+function getOwnAdoptedCallback(elementConstructor)
+{
+    return Object.getOwnPropertyDescriptor(elementConstructor.prototype, OWN_CONNECTED_CALLBACK).value;
 }
 
 function getOwnAttributeChangedCallback(elementConstructor)
@@ -162,6 +194,29 @@ function injectDisconnectedCallback(elementConstructor, ...callbacks)
                 callback.call(this);
             }
             ownDisconnectedCallback.call(this);
+        }
+    }
+}
+
+function injectAdoptedCallback(elementConstructor, ...callbacks)
+{
+    _injectPropertyValue(
+        elementConstructor.prototype,
+        'adoptedCallback',
+        OWN_ADOPTED_CALLBACK,
+        createAdoptedCallbackFunction(callbacks)
+    );
+
+    function createAdoptedCallbackFunction(callbacks)
+    {
+        return function adoptedCallback()
+        {
+            const ownAdoptedCallback = getOwnAdoptedCallback(getConstructorOf(this));
+            for(let callback of callbacks)
+            {
+                callback.call(this);
+            }
+            ownAdoptedCallback.call(this);
         }
     }
 }
